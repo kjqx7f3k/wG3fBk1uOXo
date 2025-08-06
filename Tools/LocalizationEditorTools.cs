@@ -143,15 +143,15 @@ public class LocalizationEditorTools : EditorWindow
         
         if (GUILayout.Button("Find DialogManager in Scene"))
         {
-            var dialogManager = FindFirstObjectByType<DialogManager>();
+            var dialogManager = FindFirstObjectByType<InteractiveDialogManager>();
             if (dialogManager != null)
             {
                 Selection.activeGameObject = dialogManager.gameObject;
-                EditorUtility.DisplayDialog("Dialog Manager", $"Found DialogManager on: {dialogManager.gameObject.name}", "OK");
+                EditorUtility.DisplayDialog("Dialog Manager", $"Found InteractiveDialogManager on: {dialogManager.gameObject.name}", "OK");
             }
             else
             {
-                EditorUtility.DisplayDialog("Dialog Manager", "No DialogManager found in scene.", "OK");
+                EditorUtility.DisplayDialog("Dialog Manager", "No InteractiveDialogManager found in scene.", "OK");
             }
         }
         

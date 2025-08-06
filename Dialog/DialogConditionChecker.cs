@@ -10,7 +10,7 @@ public static class DialogConditionChecker
     /// </summary>
     /// <param name="condition">要檢查的條件</param>
     /// <returns>條件是否滿足</returns>
-    public static bool CheckCondition(DialogManager.DialogCondition condition)
+    public static bool CheckCondition(BaseDialogManager.DialogCondition condition)
     {
         if (condition == null || condition.type == null || condition.value == null)
         {
@@ -44,7 +44,7 @@ public static class DialogConditionChecker
     /// </summary>
     /// <param name="condition">條件</param>
     /// <returns>是否滿足</returns>
-    private static bool CheckTagCondition(DialogManager.DialogCondition condition)
+    private static bool CheckTagCondition(BaseDialogManager.DialogCondition condition)
     {
         if (TagSystem.Instance == null)
         {
@@ -78,7 +78,7 @@ public static class DialogConditionChecker
     /// </summary>
     /// <param name="condition">條件</param>
     /// <returns>是否滿足</returns>
-    private static bool CheckItemCondition(DialogManager.DialogCondition condition)
+    private static bool CheckItemCondition(BaseDialogManager.DialogCondition condition)
     {
         if (InventoryManager.Instance == null)
         {

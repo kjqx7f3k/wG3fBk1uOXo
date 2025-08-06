@@ -16,7 +16,7 @@ public static class DialogDataLoader
     /// <summary>
     /// 語言-對話映射：Dictionary&lt;語言代碼, Dictionary&lt;對話ID, DialogData&gt;&gt;
     /// </summary>
-    private static Dictionary<string, Dictionary<string, DialogManager.DialogData>> languageDialogMap = new Dictionary<string, Dictionary<string, DialogManager.DialogData>>();
+    private static Dictionary<string, Dictionary<string, BaseDialogManager.DialogData>> languageDialogMap = new Dictionary<string, Dictionary<string, BaseDialogManager.DialogData>>();
     
     /// <summary>
     /// 當前語言代碼
@@ -34,11 +34,11 @@ public static class DialogDataLoader
     /// </summary>
     public struct LoadResult
     {
-        public Dictionary<int, DialogManager.DialogLine> dialogLines;
-        public DialogManager.DialogData dialogData;
+        public Dictionary<int, BaseDialogManager.DialogLine> dialogLines;
+        public BaseDialogManager.DialogData dialogData;
         public bool success;
         
-        public LoadResult(Dictionary<int, DialogManager.DialogLine> dialogLines, DialogManager.DialogData dialogData, bool success)
+        public LoadResult(Dictionary<int, BaseDialogManager.DialogLine> dialogLines, BaseDialogManager.DialogData dialogData, bool success)
         {
             this.dialogLines = dialogLines;
             this.dialogData = dialogData;
@@ -66,7 +66,7 @@ public static class DialogDataLoader
             if (cachedDialogData != null)
             {
                 // 每次都重新生成DialogLine以確保條件檢查是最新的
-                Dictionary<int, DialogManager.DialogLine> dialogLines = ConvertToDialogLines(cachedDialogData, fileName);
+                Dictionary<int, BaseDialogManager.DialogLine> dialogLines = ConvertToDialogLines(cachedDialogData, fileName);
                 
                 totalStopwatch.Stop();
                 Debug.Log($"從緩存重新生成對話總耗時：{totalStopwatch.Elapsed.TotalMilliseconds} 毫秒 - {fileName}");
@@ -100,7 +100,7 @@ public static class DialogDataLoader
         string fileContent = LoadFileContent(fileName);
         if (fileContent == null)
         {
-            return new LoadResult(new Dictionary<int, DialogManager.DialogLine>(), null, false);
+            return new LoadResult(new Dictionary<int, BaseDialogManager.DialogLine>(), null, false);
         }
         
         // 檢查文件格式
@@ -110,14 +110,14 @@ public static class DialogDataLoader
         }
         
         // 解析JSON內容
-        DialogManager.DialogData dialogData = ParseJsonContent(fileContent, fileName);
+        BaseDialogManager.DialogData dialogData = ParseJsonContent(fileContent, fileName);
         if (dialogData == null)
         {
-            return new LoadResult(new Dictionary<int, DialogManager.DialogLine>(), null, false);
+            return new LoadResult(new Dictionary<int, BaseDialogManager.DialogLine>(), null, false);
         }
         
         // 轉換為DialogLine字典
-        Dictionary<int, DialogManager.DialogLine> dialogLines = ConvertToDialogLines(dialogData, fileName);
+        Dictionary<int, BaseDialogManager.DialogLine> dialogLines = ConvertToDialogLines(dialogData, fileName);
         
         return new LoadResult(dialogLines, dialogData, true);
     }
@@ -162,7 +162,7 @@ public static class DialogDataLoader
     /// <param name="jsonContent">JSON內容字符串</param>
     /// <param name="fileName">文件名（用於錯誤報告）</param>
     /// <returns>解析後的DialogData，失敗時返回null</returns>
-    private static DialogManager.DialogData ParseJsonContent(string jsonContent, string fileName)
+    private static BaseDialogManager.DialogData ParseJsonContent(string jsonContent, string fileName)
     {
         if (string.IsNullOrEmpty(jsonContent))
         {
@@ -175,7 +175,7 @@ public static class DialogDataLoader
             System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
             stopwatch.Start();
             
-            DialogManager.DialogData dialogData = JsonUtility.FromJson<DialogManager.DialogData>(jsonContent);
+            BaseDialogManager.DialogData dialogData = JsonUtility.FromJson<BaseDialogManager.DialogData>(jsonContent);
             
             stopwatch.Stop();
             Debug.Log($"JSON解析耗時：{stopwatch.Elapsed.TotalMilliseconds} 毫秒 - {fileName}");
@@ -202,9 +202,9 @@ public static class DialogDataLoader
     /// <param name="dialogData">對話數據</param>
     /// <param name="fileName">文件名（用於錯誤報告）</param>
     /// <returns>DialogLine字典</returns>
-    private static Dictionary<int, DialogManager.DialogLine> ConvertToDialogLines(DialogManager.DialogData dialogData, string fileName)
+    private static Dictionary<int, BaseDialogManager.DialogLine> ConvertToDialogLines(BaseDialogManager.DialogData dialogData, string fileName)
     {
-        Dictionary<int, DialogManager.DialogLine> dialogLines = new Dictionary<int, DialogManager.DialogLine>();
+        Dictionary<int, BaseDialogManager.DialogLine> dialogLines = new Dictionary<int, BaseDialogManager.DialogLine>();
         
         if (dialogData?.dialogs == null)
         {
@@ -217,9 +217,9 @@ public static class DialogDataLoader
             System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
             stopwatch.Start();
             
-            foreach (DialogManager.DialogEntry entry in dialogData.dialogs)
+            foreach (BaseDialogManager.DialogEntry entry in dialogData.dialogs)
             {
-                DialogManager.DialogLine dialogLine = new DialogManager.DialogLine(
+                BaseDialogManager.DialogLine dialogLine = new BaseDialogManager.DialogLine(
                     entry.id, 
                     entry.nextId, 
                     entry.expressionId, 
@@ -245,7 +245,7 @@ public static class DialogDataLoader
         catch (System.Exception e)
         {
             Debug.LogError($"轉換DialogLine時發生錯誤 {fileName}: {e.Message}");
-            return new Dictionary<int, DialogManager.DialogLine>();
+            return new Dictionary<int, BaseDialogManager.DialogLine>();
         }
     }
     
@@ -254,14 +254,14 @@ public static class DialogDataLoader
     /// </summary>
     /// <param name="optionEntries">選項條目數組</param>
     /// <param name="dialogLine">目標對話行</param>
-    private static void ProcessDialogOptions(DialogManager.DialogOptionEntry[] optionEntries, DialogManager.DialogLine dialogLine)
+    private static void ProcessDialogOptions(BaseDialogManager.DialogOptionEntry[] optionEntries, BaseDialogManager.DialogLine dialogLine)
     {
-        foreach (DialogManager.DialogOptionEntry optionEntry in optionEntries)
+        foreach (BaseDialogManager.DialogOptionEntry optionEntry in optionEntries)
         {
             // 檢查選項是否應該顯示
             if (optionEntry.condition == null || DialogConditionChecker.CheckCondition(optionEntry.condition))
             {
-                dialogLine.options.Add(new DialogManager.DialogOption(optionEntry.text, optionEntry.nextId));
+                dialogLine.options.Add(new BaseDialogManager.DialogOption(optionEntry.text, optionEntry.nextId));
             }
             else
             {
@@ -269,7 +269,7 @@ public static class DialogDataLoader
                 if (!string.IsNullOrEmpty(optionEntry.failText))
                 {
                     // 顯示failText作為不可選擇的選項
-                    dialogLine.options.Add(new DialogManager.DialogOption($"[{optionEntry.failText}]", -1));
+                    dialogLine.options.Add(new BaseDialogManager.DialogOption($"[{optionEntry.failText}]", -1));
                 }
             }
         }
@@ -358,7 +358,7 @@ public static class DialogDataLoader
     /// <param name="dialogData">要保存的對話數據</param>
     /// <param name="fileName">文件名（不含副檔名）</param>
     /// <returns>是否保存成功</returns>
-    public static bool SaveDialogDataToBinary(DialogManager.DialogData dialogData, string fileName)
+    public static bool SaveDialogDataToBinary(BaseDialogManager.DialogData dialogData, string fileName)
     {
         if (dialogData == null)
         {
@@ -402,7 +402,7 @@ public static class DialogDataLoader
     /// </summary>
     /// <param name="fileName">文件名（不含副檔名）</param>
     /// <returns>載入的 DialogData，失敗時返回 null</returns>
-    public static DialogManager.DialogData LoadDialogDataFromBinary(string fileName)
+    public static BaseDialogManager.DialogData LoadDialogDataFromBinary(string fileName)
     {
         string filePath = GetDialogBinaryFilePath(fileName);
         
@@ -420,7 +420,7 @@ public static class DialogDataLoader
             BinaryFormatter formatter = new BinaryFormatter();
             using (FileStream stream = new FileStream(filePath, FileMode.Open))
             {
-                DialogManager.DialogData dialogData = (DialogManager.DialogData)formatter.Deserialize(stream);
+                BaseDialogManager.DialogData dialogData = (BaseDialogManager.DialogData)formatter.Deserialize(stream);
                 
                 stopwatch.Stop();
                 Debug.Log($"DialogData 二進制載入完成，耗時：{stopwatch.Elapsed.TotalMilliseconds} 毫秒 - {filePath}");
@@ -591,7 +591,7 @@ public static class DialogDataLoader
         }
         
         // 為該語言創建對話字典
-        Dictionary<string, DialogManager.DialogData> dialogDict = new Dictionary<string, DialogManager.DialogData>();
+        Dictionary<string, BaseDialogManager.DialogData> dialogDict = new Dictionary<string, BaseDialogManager.DialogData>();
         int successCount = 0;
         
         foreach (string filePath in jsonFiles)
@@ -608,7 +608,7 @@ public static class DialogDataLoader
                 }
                 
                 // 解析 JSON 內容
-                DialogManager.DialogData dialogData = ParseJsonContent(fileContent, Path.GetFileName(filePath));
+                BaseDialogManager.DialogData dialogData = ParseJsonContent(fileContent, Path.GetFileName(filePath));
                 
                 if (dialogData != null)
                 {
@@ -676,7 +676,7 @@ public static class DialogDataLoader
     /// </summary>
     /// <param name="dialogId">對話ID</param>
     /// <returns>對話數據，找不到則返回null</returns>
-    public static DialogManager.DialogData GetLocalizedDialogData(string dialogId)
+    public static BaseDialogManager.DialogData GetLocalizedDialogData(string dialogId)
     {
         return GetLocalizedDialogData(currentLanguage, dialogId);
     }
@@ -687,7 +687,7 @@ public static class DialogDataLoader
     /// <param name="languageCode">語言代碼</param>
     /// <param name="dialogId">對話ID</param>
     /// <returns>對話數據，找不到則返回null</returns>
-    public static DialogManager.DialogData GetLocalizedDialogData(string languageCode, string dialogId)
+    public static BaseDialogManager.DialogData GetLocalizedDialogData(string languageCode, string dialogId)
     {
         if (!isLocalizationInitialized)
         {
@@ -730,12 +730,12 @@ public static class DialogDataLoader
         string targetLanguage = string.IsNullOrEmpty(languageCode) ? currentLanguage : languageCode;
         
         // 嘗試從本地化映射獲取
-        DialogManager.DialogData dialogData = GetLocalizedDialogData(targetLanguage, dialogId);
+        BaseDialogManager.DialogData dialogData = GetLocalizedDialogData(targetLanguage, dialogId);
         
         if (dialogData != null)
         {
             // 轉換為 DialogLine
-            Dictionary<int, DialogManager.DialogLine> dialogLines = ConvertToDialogLines(dialogData, $"[{targetLanguage}] {dialogId}");
+            Dictionary<int, BaseDialogManager.DialogLine> dialogLines = ConvertToDialogLines(dialogData, $"[{targetLanguage}] {dialogId}");
             return new LoadResult(dialogLines, dialogData, true);
         }
         

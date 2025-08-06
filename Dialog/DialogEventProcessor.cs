@@ -2,7 +2,7 @@ using UnityEngine;
 
 public static class DialogEventProcessor
 {
-    public static void ProcessDialogEvents(DialogManager.DialogEvent[] events)
+    public static void ProcessDialogEvents(BaseDialogManager.DialogEvent[] events)
     {
         if (events == null || events.Length == 0)
         {
@@ -11,7 +11,7 @@ public static class DialogEventProcessor
 
         Debug.Log($"處理 {events.Length} 個對話事件");
 
-        foreach (DialogManager.DialogEvent dialogEvent in events)
+        foreach (BaseDialogManager.DialogEvent dialogEvent in events)
         {
             if (ShouldExecuteEvent(dialogEvent))
             {
@@ -20,7 +20,7 @@ public static class DialogEventProcessor
         }
     }
 
-    private static bool ShouldExecuteEvent(DialogManager.DialogEvent dialogEvent)
+    private static bool ShouldExecuteEvent(BaseDialogManager.DialogEvent dialogEvent)
     {
         if (dialogEvent.condition == null)
         {
@@ -30,7 +30,7 @@ public static class DialogEventProcessor
         return DialogConditionChecker.CheckCondition(dialogEvent.condition);
     }
 
-    private static void ExecuteEvent(DialogManager.DialogEvent dialogEvent)
+    private static void ExecuteEvent(BaseDialogManager.DialogEvent dialogEvent)
     {
         if (string.IsNullOrEmpty(dialogEvent.event_type))
         {
@@ -60,7 +60,7 @@ public static class DialogEventProcessor
         }
     }
 
-    private static void ExecuteUpdateTagEvent(DialogManager.DialogEvent dialogEvent)
+    private static void ExecuteUpdateTagEvent(BaseDialogManager.DialogEvent dialogEvent)
     {
         if (TagSystem.Instance == null)
         {
@@ -85,7 +85,7 @@ public static class DialogEventProcessor
         Debug.Log($"更新標籤: {tagId} = {tagValue}");
     }
 
-    private static void ExecuteGiveItemEvent(DialogManager.DialogEvent dialogEvent)
+    private static void ExecuteGiveItemEvent(BaseDialogManager.DialogEvent dialogEvent)
     {
         if (InventoryManager.Instance == null)
         {
@@ -110,7 +110,7 @@ public static class DialogEventProcessor
         Debug.Log($"給予物品: {itemId} x{itemCount} (尚未完全實現)");
     }
 
-    private static void ExecuteTakeItemEvent(DialogManager.DialogEvent dialogEvent)
+    private static void ExecuteTakeItemEvent(BaseDialogManager.DialogEvent dialogEvent)
     {
         if (InventoryManager.Instance == null)
         {

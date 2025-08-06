@@ -6,70 +6,70 @@ using System.IO;
 using UnityEngine.UI;
 using System;
 
-
-public class DialogManager : UIPanel
+/// <summary>
+/// 對話管理器基礎類，包含所有共同功能
+/// </summary>
+public abstract class BaseDialogManager : UIPanel
 {
-    public static DialogManager Instance { get; private set; }
-    
     [Header("UI 組件引用")]
-    [SerializeField] private TextMeshProUGUI dialogText;
-    [SerializeField] private TextMeshProUGUI optionsText; // 用於顯示選項的TextMeshProUGUI
-    [SerializeField] private Image dialogBackground;
+    [SerializeField] protected TextMeshProUGUI dialogText;
+    [SerializeField] protected TextMeshProUGUI optionsText; // 用於顯示選項的TextMeshProUGUI
+    [SerializeField] protected Image dialogBackground;
     
     public bool IsInDialog => IsOpen;
     
-    [SerializeField] private float typingSpeed = 0.02f;
+    [SerializeField] protected float typingSpeed = 0.02f;
     
     [Header("終端效果設定")]
-    [SerializeField] private bool enableTerminalCursor = true;
-    [SerializeField] private string cursorCharacter = "█";
-    [SerializeField] private float cursorBlinkSpeed = 1.0f;
-    [SerializeField] private Color cursorColor = Color.white;
+    [SerializeField] protected bool enableTerminalCursor = true;
+    [SerializeField] protected string cursorCharacter = "█";
+    [SerializeField] protected float cursorBlinkSpeed = 1.0f;
+    [SerializeField] protected Color cursorColor = Color.white;
     
     [Header("文字控制設定")]
-    [SerializeField] private bool enableTextControl = true;
+    [SerializeField] protected bool enableTextControl = true;
     
     [Header("導航設定")]
-    [SerializeField] private float navigationCooldown = 0.2f; // 導航冷卻時間（秒）
-    private float lastNavigationTime = 0f; // 上次導航的時間
+    [SerializeField] protected float navigationCooldown = 0.2f; // 導航冷卻時間（秒）
+    protected float lastNavigationTime = 0f; // 上次導航的時間
     
     [Header("多語言設定")]
-    [SerializeField] private string dialogBasePath = "StreamingAssets/Dialogs"; // 對話文件基礎路徑
-    [SerializeField] private string defaultLanguage = "en"; // 預設語言代碼
+    [SerializeField] protected string dialogBasePath = "StreamingAssets/Dialogs"; // 對話文件基礎路徑
+    [SerializeField] protected string defaultLanguage = "en"; // 預設語言代碼
     
     // 動態文字控制變數
-    private float currentTypingSpeed;
-    private float currentCursorBlinkSpeed;
+    protected float currentTypingSpeed;
+    protected float currentCursorBlinkSpeed;
     
-    private bool isDisplayingDialog = false;
-    private Dictionary<int, DialogLine> dialogLines = new Dictionary<int, DialogLine>();
-    private GameObject currentModel;
-    private int currentDialogId = -1;
-    private List<DialogOption> currentOptions = new List<DialogOption>();
-    private int selectedOptionIndex = 0;
+    protected bool isDisplayingDialog = false;
+    protected Dictionary<int, DialogLine> dialogLines = new Dictionary<int, DialogLine>();
+    protected GameObject currentModel;
+    protected int currentDialogId = -1;
+    protected List<DialogOption> currentOptions = new List<DialogOption>();
+    protected int selectedOptionIndex = 0;
     
     // 對話終端游標效果變數
-    private bool isDialogCursorVisible = true;
-    private Coroutine dialogCursorBlinkCoroutine;
-    private string currentDisplayText = "";
-    private bool isTypingComplete = false;
+    protected bool isDialogCursorVisible = true;
+    protected Coroutine dialogCursorBlinkCoroutine;
+    protected string currentDisplayText = "";
+    protected bool isTypingComplete = false;
     
     // 選項終端游標效果變數
-    private bool isDisplayingOptions = false;
-    private bool isOptionsCursorVisible = true;
-    private Coroutine optionsCursorBlinkCoroutine;
-    private string currentOptionsText = "";
-    private string baseOptionsText = ""; // 新增：存儲純文字內容，不包含選擇前綴
-    private int currentOptionIndex = 0;
-    private bool isOptionsTypingComplete = false;
+    protected bool isDisplayingOptions = false;
+    protected bool isOptionsCursorVisible = true;
+    protected Coroutine optionsCursorBlinkCoroutine;
+    protected string currentOptionsText = "";
+    protected string baseOptionsText = ""; // 新增：存儲純文字內容，不包含選擇前綴
+    protected int currentOptionIndex = 0;
+    protected bool isOptionsTypingComplete = false;
     
-    private string currentDialogFile = "";
+    protected string currentDialogFile = "";
     
     // 新增：跳過打字動畫旗標
-    private bool isSkippingAnimation = false;
+    protected bool isSkippingAnimation = false;
     
     // 當前載入的對話數據（用於條件檢查）
-    private DialogData currentDialogData = null;
+    protected DialogData currentDialogData = null;
     
     // JSON數據結構
     [System.Serializable]
@@ -200,20 +200,10 @@ public class DialogManager : UIPanel
     
     protected override void Awake()
     {
-        // 標準 Singleton 寫法，避免編輯器中的重複執行問題
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
-        Instance = this;
-        DontDestroyOnLoad(gameObject);
-
         base.Awake(); // 呼叫基底類別的Awake
         
-        // 設定UIPanel屬性
+        // 設定UIPanel屬性（子類會覆寫）
         pauseGameWhenOpen = false;  // 對話不暫停遊戲
-        blockCharacterMovement = true;  // 但阻擋角色移動
         canCloseWithEscape = false;  // 對話不能用ESC關閉
         
         // 確保面板初始為關閉狀態
@@ -232,7 +222,7 @@ public class DialogManager : UIPanel
     /// </summary>
     private void InitializeLocalizationSystem()
     {
-        Debug.Log($"[DialogManager] 開始初始化多語言系統，基礎路徑: {dialogBasePath}");
+        Debug.Log($"[{GetType().Name}] 開始初始化多語言系統，基礎路徑: {dialogBasePath}");
         
         int loadedLanguageCount = DialogDataLoader.LoadAllLanguageDialogs(dialogBasePath);
         
@@ -246,47 +236,37 @@ public class DialogManager : UIPanel
                 if (supportedLanguages.Length > 0)
                 {
                     DialogDataLoader.SetCurrentLanguage(supportedLanguages[0]);
-                    Debug.LogWarning($"[DialogManager] 預設語言 '{defaultLanguage}' 不存在，改用 '{supportedLanguages[0]}'");
+                    Debug.LogWarning($"[{GetType().Name}] 預設語言 '{defaultLanguage}' 不存在，改用 '{supportedLanguages[0]}'");
                 }
             }
             
-            Debug.Log($"[DialogManager] 多語言系統初始化完成，載入 {loadedLanguageCount} 種語言");
-            Debug.Log($"[DialogManager] 當前語言: {DialogDataLoader.GetCurrentLanguage()}");
-            Debug.Log($"[DialogManager] 支援語言: {string.Join(", ", DialogDataLoader.GetSupportedLanguages())}");
+            Debug.Log($"[{GetType().Name}] 多語言系統初始化完成，載入 {loadedLanguageCount} 種語言");
+            Debug.Log($"[{GetType().Name}] 當前語言: {DialogDataLoader.GetCurrentLanguage()}");
+            Debug.Log($"[{GetType().Name}] 支援語言: {string.Join(", ", DialogDataLoader.GetSupportedLanguages())}");
         }
         else
         {
-            Debug.LogError($"[DialogManager] 多語言系統初始化失敗，無法載入任何語言文件，路徑: {dialogBasePath}");
+            Debug.LogError($"[{GetType().Name}] 多語言系統初始化失敗，無法載入任何語言文件，路徑: {dialogBasePath}");
         }
     }
     
-    private void OnDestroy()
+    protected virtual void OnDestroy()
     {
-        if (Instance == this)
-        {
-            // 清理引用
-            dialogLines.Clear();
-            currentOptions.Clear();
-            currentModel = null;
-            currentDialogData = null;
-            
-            // 重置單例引用
-            Instance = null;
-            
-            Debug.Log("DialogManager 已清理");
-        }
+        // 清理引用
+        dialogLines.Clear();
+        currentOptions.Clear();
+        currentModel = null;
+        currentDialogData = null;
+        
+        Debug.Log($"{GetType().Name} 已清理");
     }
     
-    private void OnApplicationQuit()
+    protected virtual void OnApplicationQuit()
     {
         // 應用程式退出時清理
-        if (Instance == this)
-        {
-            Instance = null;
-        }
     }
     
-    private void HideDialogUI()
+    protected void HideDialogUI()
     {
         // 停止對話游標閃爍協程
         if (dialogCursorBlinkCoroutine != null)
@@ -310,7 +290,7 @@ public class DialogManager : UIPanel
         
         // 隱藏整個DialogPanel，使用重寫的Close方法
         Close(); 
-        Debug.Log("隱藏DialogPanel");
+        Debug.Log($"隱藏{GetType().Name}");
         if (currentModel != null)
         {
             currentModel.SetActive(false);
@@ -333,16 +313,15 @@ public class DialogManager : UIPanel
         isOptionsCursorVisible = true;
         currentOptionIndex = 0;
         
-        // 結束對話狀態 - 由OnClosed處理
-        Debug.Log("對話結束");
+        Debug.Log($"{GetType().Name}對話結束");
     }
     
-    private void ShowDialogUI(GameObject model)
+    protected void ShowDialogUI(GameObject model)
     {
         // 首先確保DialogPanel本身是啟用的，使用重寫的Open方法
         Open();
         EnsureOptionsUIInitialState(); // 新增：在顯示UI時，確保選項被重置和隱藏
-        Debug.Log("啟用DialogPanel");
+        Debug.Log($"啟用{GetType().Name}");
         if (model != null)
         {
             currentModel = model;
@@ -350,7 +329,7 @@ public class DialogManager : UIPanel
             Debug.Log("啟用對話模型");
         }
         
-        Debug.Log("對話開始");
+        Debug.Log($"{GetType().Name}對話開始");
     }
     
     /// <summary>
@@ -359,8 +338,7 @@ public class DialogManager : UIPanel
     protected override void OnOpened()
     {
         base.OnOpened();
-        // 對話開啟時的處理
-        Debug.Log("對話UI已開啟");
+        Debug.Log($"{GetType().Name}UI已開啟");
     }
     
     /// <summary>
@@ -403,13 +381,13 @@ public class DialogManager : UIPanel
         isDisplayingOptions = false;
         isOptionsCursorVisible = true;
         
-        Debug.Log("對話結束");
+        Debug.Log($"{GetType().Name}對話結束");
     }
     
     /// <summary>
     /// 確保選項UI的初始狀態正確（隱藏且清空內容）
     /// </summary>
-    private void EnsureOptionsUIInitialState()
+    protected void EnsureOptionsUIInitialState()
     {
         if (optionsText != null)
         {
@@ -428,7 +406,7 @@ public class DialogManager : UIPanel
     /// 檢查是否有其他暫停遊戲的UI開啟
     /// </summary>
     /// <returns>如果有其他暫停UI返回true</returns>
-    private bool HasOtherPausingUI()
+    protected bool HasOtherPausingUI()
     {
         // 檢查常見的暫停UI
         if (GameMenuManager.Instance != null && GameMenuManager.Instance.IsOpen && GameMenuManager.Instance.PausesGame)
@@ -444,22 +422,18 @@ public class DialogManager : UIPanel
     }
     
     /// <summary>
-    /// 處理自定義輸入 - 重寫UIPanel方法
+    /// 處理自定義輸入 - 抽象方法，由子類實現
     /// </summary>
-    protected override void HandleCustomInput()
-    {
-        // 處理對話的鍵盤輸入
-        HandleDialogInput();
-    }
+    protected abstract override void HandleCustomInput();
     
     /// <summary>
     /// 強制關閉對話（用於特殊情況，如存檔加載）
     /// </summary>
-    public void ForceCloseDialog()
+    public virtual void ForceCloseDialog()
     {
         if (IsInDialog)
         {
-            Debug.Log("[DialogManager] 強制關閉對話");
+            Debug.Log($"[{GetType().Name}] 強制關閉對話");
             HideDialogUI();
         }
     }
@@ -468,7 +442,7 @@ public class DialogManager : UIPanel
     /// 檢查是否應該阻止遊戲輸入
     /// </summary>
     /// <returns>是否應該阻止遊戲輸入</returns>
-    public bool ShouldBlockGameInput()
+    public virtual bool ShouldBlockGameInput()
     {
         return IsInDialog;
     }
@@ -479,7 +453,7 @@ public class DialogManager : UIPanel
     /// <param name="dialogLines">對話行字典</param>
     /// <param name="dialogData">對話數據</param>
     /// <param name="model">對話模型</param>
-    public void SetDialogData(Dictionary<int, DialogLine> dialogLines, DialogData dialogData, GameObject model = null)
+    public virtual void SetDialogData(Dictionary<int, DialogLine> dialogLines, DialogData dialogData, GameObject model = null)
     {
         this.dialogLines = dialogLines;
         this.currentDialogData = dialogData;
@@ -492,7 +466,7 @@ public class DialogManager : UIPanel
         }
         else
         {
-            Debug.LogError("[DialogManager] 設定的對話數據為空");
+            Debug.LogError($"[{GetType().Name}] 設定的對話數據為空");
         }
     }
     
@@ -501,20 +475,20 @@ public class DialogManager : UIPanel
     /// </summary>
     /// <param name="dialogId">對話ID</param>
     /// <param name="model">對話模型</param>
-    public void LoadDialog(string dialogId, GameObject model = null)
+    public virtual void LoadDialog(string dialogId, GameObject model = null)
     {
         // 檢查UI組件是否設置
         if (dialogText == null || optionsText == null || dialogBackground == null)
         {
-            Debug.LogError("DialogManager: UI組件未設置！請在Inspector中指定所有必要的UI組件。");
-            Debug.LogError("對話系統無法正常工作，請檢查DialogManager的設置。");
+            Debug.LogError($"{GetType().Name}: UI組件未設置！請在Inspector中指定所有必要的UI組件。");
+            Debug.LogError("對話系統無法正常工作，請檢查設置。");
             return;
         }
         
         // 檢查多語言系統是否已初始化
         if (!DialogDataLoader.IsLocalizationInitialized())
         {
-            Debug.LogError($"[DialogManager] 多語言系統尚未初始化，無法載入對話: {dialogId}");
+            Debug.LogError($"[{GetType().Name}] 多語言系統尚未初始化，無法載入對話: {dialogId}");
             return;
         }
         
@@ -525,17 +499,17 @@ public class DialogManager : UIPanel
         
         if (!loadResult.success || loadResult.dialogData == null)
         {
-            Debug.LogError($"[DialogManager] 無法載入本地化對話: {dialogId}，當前語言: {DialogDataLoader.GetCurrentLanguage()}");
+            Debug.LogError($"[{GetType().Name}] 無法載入本地化對話: {dialogId}，當前語言: {DialogDataLoader.GetCurrentLanguage()}");
             
             // 列出當前語言支援的對話
-            Debug.LogError($"[DialogManager] 可用語言: {string.Join(", ", DialogDataLoader.GetSupportedLanguages())}");
+            Debug.LogError($"[{GetType().Name}] 可用語言: {string.Join(", ", DialogDataLoader.GetSupportedLanguages())}");
             return;
         }
         
         dialogLines = loadResult.dialogLines;
         currentDialogData = loadResult.dialogData;
         
-        Debug.Log($"[DialogManager] 成功載入本地化對話: {dialogId} [{DialogDataLoader.GetCurrentLanguage()}]");
+        Debug.Log($"[{GetType().Name}] 成功載入本地化對話: {dialogId} [{DialogDataLoader.GetCurrentLanguage()}]");
         
         // 開始顯示對話
         if (dialogLines.Count > 0)
@@ -547,107 +521,17 @@ public class DialogManager : UIPanel
         }
         else
         {
-            Debug.LogError($"[DialogManager] 載入的對話數據為空: {dialogId}");
+            Debug.LogError($"[{GetType().Name}] 載入的對話數據為空: {dialogId}");
         }
     }
-    
     
     /// <summary>
-    /// 處理對話輸入邏輯
+    /// 顯示選項 - 抽象方法，由子類實現
     /// </summary>
-    private void HandleDialogInput()
-    {
-        // 修改：處理跳過打字動畫的邏輯
-        // 當對話正在播放、打字動畫未完成且玩家按下空白鍵時
-        if (InputSystemWrapper.Instance == null)
-        {
-            Debug.LogError("[DialogManager] InputSystemWrapper instance not found!");
-            return;
-        }
-        
-        bool confirmPressed = InputSystemWrapper.Instance.GetUIConfirmDown();
-        
-        if (isDisplayingDialog && !isTypingComplete && confirmPressed)
-        {
-            isSkippingAnimation = true;
-        }
-
-        if (currentOptions.Count > 0)
-        {
-            // 允許在選項顯示過程中或顯示完成後進行導航
-            if (!enableTerminalCursor || isDisplayingOptions || isOptionsTypingComplete)
-            {
-                Vector2 navigation = InputSystemWrapper.Instance.GetUINavigationInput();
-                bool confirmInput = InputSystemWrapper.Instance.GetUIConfirmDown();
-                
-                // 檢查是否有導航輸入並應用冷卻時間
-                bool hasNavigationInput = Mathf.Abs(navigation.y) > 0.5f;
-                
-                if (hasNavigationInput)
-                {
-                    // 只有當前時間超過了 (上次導航時間 + 冷卻時間) 才執行導航
-                    if (Time.unscaledTime > lastNavigationTime + navigationCooldown)
-                    {
-                        lastNavigationTime = Time.unscaledTime; // 更新上次導航時間
-                        
-                        // 處理上下導航
-                        if (navigation.y > 0.5f)
-                        {
-                            selectedOptionIndex = (selectedOptionIndex - 1 + currentOptions.Count) % currentOptions.Count;
-                            UpdateOptionsDisplay();
-                        }
-                        else if (navigation.y < -0.5f)
-                        {
-                            selectedOptionIndex = (selectedOptionIndex + 1) % currentOptions.Count;
-                            UpdateOptionsDisplay();
-                        }
-                    }
-                    // 如果在冷卻時間內，忽略導航輸入（不輸出調試訊息以避免日誌洪水）
-                }
-
-                // 處理確認鍵（空格或回車）- 只有在選項顯示完成後才接受，確認輸入不受冷卻時間影響
-                if (confirmInput && (!enableTerminalCursor || isOptionsTypingComplete))
-                {
-                    OnOptionSelected(currentOptions[selectedOptionIndex].nextId);
-                }
-            }
-        }
-    }
+    /// <param name="options">選項列表</param>
+    protected abstract void ShowOptions(List<DialogOption> options);
     
-    private void UpdateOptionsDisplay()
-    {
-        if (optionsText != null)
-        {
-            // 如果啟用終端效果，使用動態前綴更新
-            if (enableTerminalCursor)
-            {
-                // 基於baseOptionsText動態添加選擇前綴
-                if (isDisplayingOptions || isOptionsTypingComplete)
-                {
-                    UpdateOptionsDisplayWithCursor();
-                }
-            }
-            else
-            {
-                // 普通顯示模式
-                string optionsDisplay = "";
-                for (int i = 0; i < currentOptions.Count; i++)
-                {
-                    if (i == selectedOptionIndex)
-                    {
-                        optionsDisplay += "> " + currentOptions[i].text + "\n";
-                    }
-                    else
-                    {
-                        optionsDisplay += "  " + currentOptions[i].text + "\n";
-                    }
-                }
-                optionsText.text = optionsDisplay;
-            }
-        }
-    }
-   
-    private IEnumerator DisplayNextLine()
+    protected virtual IEnumerator DisplayNextLine()
     {
         if (isDisplayingDialog || currentDialogId == -1 || !dialogLines.ContainsKey(currentDialogId))
             yield break;
@@ -673,7 +557,6 @@ public class DialogManager : UIPanel
         // 檢查是否有文字需要顯示
         if (!string.IsNullOrEmpty(currentLine.text))
         {
-
             // 開始對話游標閃爍效果
             if (enableTerminalCursor) dialogCursorBlinkCoroutine = StartCoroutine(BlinkDialogCursor());
             
@@ -688,12 +571,10 @@ public class DialogManager : UIPanel
             {
                 DialogEventProcessor.ProcessDialogEvents(currentLine.events);
             }
-            
-            // 繼續對話游標閃爍效果（不停止) maybe not needed 
         }
         else
         {
-            // 沒有文字時，隱藏對話文字UI maybe not needed
+            // 沒有文字時，隱藏對話文字UI
             isTypingComplete = true;
             
             // 即使沒有文字也要處理事件
@@ -708,38 +589,34 @@ public class DialogManager : UIPanel
         isDisplayingDialog = false;
     
         // 如果有選項，顯示選項
-        if (currentLine.options.Count > 0) ShowOptions(currentLine.options);
+        if (currentLine.options.Count > 0) 
+        {
+            ShowOptions(currentLine.options);
+        }
         else
         {
-        // 如果沒有選項但有下一個對話ID，等待玩家輸入後繼續
-        yield return new WaitUntil(() => {
-            if (InputSystemWrapper.Instance == null)
-            {
-                Debug.LogError("[DialogManager] InputSystemWrapper instance not found!");
-                return false;
-            }
-            
-            return InputSystemWrapper.Instance.GetUIConfirmDown();
-        });
-            
-            // 使用新的下一個對話ID決定邏輯
-            int nextDialogId = DetermineNextDialogId(currentDialogId);
-            
-            if (nextDialogId > 0)
-            {
-                currentDialogId = nextDialogId;
-                StartCoroutine(DisplayNextLine());
-            }
-            else HideDialogUI(); // 對話結束
+            // 沒有選項時的處理由子類決定
+            yield return StartCoroutine(HandleNoOptionsDialog());
         }
     }
+    
+    /// <summary>
+    /// 處理沒有選項的對話 - 抽象方法，由子類實現
+    /// </summary>
+    protected abstract IEnumerator HandleNoOptionsDialog();
+    
+    /// <summary>
+    /// 處理選項選擇 - 抽象方法，由子類實現
+    /// </summary>
+    /// <param name="nextId">選中選項的下一個對話ID</param>
+    protected abstract void OnOptionSelected(int nextId);
     
     /// <summary>
     /// 解析文字控制指令並處理文字顯示
     /// </summary>
     /// <param name="text">包含控制指令的文字</param>
     /// <returns></returns>
-    private IEnumerator ProcessTextWithControls(string text)
+    protected IEnumerator ProcessTextWithControls(string text)
     {
         if (!enableTextControl)
         {
@@ -803,7 +680,7 @@ public class DialogManager : UIPanel
     /// <param name="text">文字</param>
     /// <param name="startIndex">開始索引</param>
     /// <returns>解析結果</returns>
-    private (bool success, string command, float parameter, string stringParam1, string stringParam2, int nextIndex) ParseControlCommand(string text, int startIndex)
+    protected (bool success, string command, float parameter, string stringParam1, string stringParam2, int nextIndex) ParseControlCommand(string text, int startIndex)
     {
         if (startIndex >= text.Length || text[startIndex] != '\\')
             return (false, "", 0f, "", "", startIndex);
@@ -839,7 +716,7 @@ public class DialogManager : UIPanel
     /// <param name="startIndex">指令開始位置</param>
     /// <param name="firstBraceStart">第一個大括號位置</param>
     /// <returns>解析結果</returns>
-    private (bool success, string command, float parameter, string stringParam1, string stringParam2, int nextIndex) ParseDelCommand(string text, int startIndex, int firstBraceStart)
+    protected (bool success, string command, float parameter, string stringParam1, string stringParam2, int nextIndex) ParseDelCommand(string text, int startIndex, int firstBraceStart)
     {
         // 解析第一個參數（時間）
         int firstBraceEnd = text.IndexOf('}', firstBraceStart);
@@ -881,7 +758,7 @@ public class DialogManager : UIPanel
     /// <param name="command">指令名稱</param>
     /// <param name="parameter">參數</param>
     /// <returns></returns>
-    private IEnumerator ExecuteControlCommand(string command, float parameter)
+    protected IEnumerator ExecuteControlCommand(string command, float parameter)
     {
         switch (command)
         {
@@ -916,7 +793,7 @@ public class DialogManager : UIPanel
     /// <param name="deleteString">要刪除的字串</param>
     /// <param name="replaceString">之後要顯示的字串</param>
     /// <returns></returns>
-    private IEnumerator ExecuteNewDelCommand(float deleteTime, string deleteString, string replaceString)
+    protected IEnumerator ExecuteNewDelCommand(float deleteTime, string deleteString, string replaceString)
     {
         Debug.Log($"文字控制: 刪除字串 '{deleteString}'，刪除速度 {deleteTime}，替換為 '{replaceString}'");
         
@@ -953,7 +830,7 @@ public class DialogManager : UIPanel
     /// 對話游標閃爍協程
     /// </summary>
     /// <returns></returns>
-    private IEnumerator BlinkDialogCursor()
+    protected IEnumerator BlinkDialogCursor()
     {
         while (true)
         {
@@ -966,7 +843,7 @@ public class DialogManager : UIPanel
     /// <summary>
     /// 更新對話顯示（包含游標效果）
     /// </summary>
-    private void UpdateDialogDisplay()
+    protected void UpdateDialogDisplay()
     {
         if (dialogText == null) return;
         
@@ -981,161 +858,6 @@ public class DialogManager : UIPanel
         }
         
         dialogText.text = displayText;
-    }
-    
-    /// <summary>
-    /// 顯示選項並帶有終端游標效果
-    /// </summary>
-    /// <returns></returns>
-    private IEnumerator DisplayOptionsWithCursor()
-    {
-        // 等待對話文字完全顯示完成
-        yield return new WaitUntil(() => isTypingComplete);
-        
-        // 啟用選項UI
-        optionsText.gameObject.SetActive(true);
-        
-        isDisplayingOptions = true;
-        isOptionsTypingComplete = false;
-        currentOptionsText = "";
-        baseOptionsText = ""; // 重置基礎文字
-        currentOptionIndex = 0;
-        
-        // 停止之前的選項游標閃爍
-        if (optionsCursorBlinkCoroutine != null) StopCoroutine(optionsCursorBlinkCoroutine);
-        
-        // 開始選項游標閃爍
-        optionsCursorBlinkCoroutine = StartCoroutine(BlinkOptionsCursor());
-        
-        // 逐個顯示選項（不包含前綴，純文字內容）
-        for (int i = 0; i < currentOptions.Count; i++)
-        {
-            string optionLine = currentOptions[i].text;
-            
-            // 逐字顯示當前選項
-            foreach (char c in optionLine)
-            {
-                baseOptionsText += c;
-                UpdateOptionsDisplayWithCursor();
-                yield return new WaitForSeconds(typingSpeed * 0.5f); // 選項顯示稍快一些
-            }
-            
-            // 只在不是最後一個選項時添加換行符
-            if (i < currentOptions.Count - 1)
-            {
-                baseOptionsText += "\n";
-                UpdateOptionsDisplayWithCursor();
-                yield return new WaitForSeconds(typingSpeed);
-            }
-        }
-        
-        // 選項顯示完成，但保持游標閃爍
-        isOptionsTypingComplete = true;
-        isDisplayingOptions = false;
-        
-        // 最終更新顯示以確保正確的選擇狀態
-        UpdateOptionsDisplayWithCursor();
-    }
-    
-    /// <summary>
-    /// 選項游標閃爍協程
-    /// </summary>
-    /// <returns></returns>
-    private IEnumerator BlinkOptionsCursor()
-    {
-        while (true)
-        {
-            isOptionsCursorVisible = !isOptionsCursorVisible;
-            UpdateOptionsDisplayWithCursor();
-            yield return new WaitForSeconds(1f / cursorBlinkSpeed);
-        }
-    }
-    
-    /// <summary>
-    /// 更新選項顯示（包含游標效果）
-    /// </summary>
-    private void UpdateOptionsDisplayWithCursor()
-    {
-        if (optionsText == null) return;
-        
-        // 基於baseOptionsText動態構建帶前綴的顯示文字
-        string[] optionLines = baseOptionsText.Split('\n');
-        currentOptionsText = "";
-        
-        for (int i = 0; i < optionLines.Length && i < currentOptions.Count; i++)
-        {
-            // 動態添加選擇前綴
-            string prefix = (i == selectedOptionIndex) ? "> " : "  ";
-            currentOptionsText += prefix + optionLines[i];
-            
-            // 只在不是最後一行時添加換行符
-            if (i < optionLines.Length - 1)
-            {
-                currentOptionsText += "\n";
-            }
-        }
-        
-        // 顯示文字和游標
-        string displayText = currentOptionsText;
-        
-        if (enableTerminalCursor)
-        {
-            // 添加選項游標效果
-            string colorHex = ColorUtility.ToHtmlStringRGB(cursorColor);
-            if (isOptionsCursorVisible) displayText += $"<color=#{colorHex}>{cursorCharacter}</color>";
-            else displayText += $"<color=#00000000>{cursorCharacter}</color>";
-        }
-        optionsText.text = displayText;
-    }
-
-    /// <summary>
-    /// 在延遲後顯示選項（用於非終端效果模式）
-    /// </summary>
-    /// <returns></returns>
-    private IEnumerator DisplayOptionsAfterDelay()
-    {
-        // 等待對話文字完全顯示完成
-        yield return new WaitUntil(() => isTypingComplete);
-        
-        // 啟用選項UI
-        optionsText.gameObject.SetActive(true);
-        
-        // 標記選項輸入完成，允許玩家操作
-        isOptionsTypingComplete = true;
-        
-        // 更新選項顯示
-        UpdateOptionsDisplay();
-    }
-
-    
-    private void ShowOptions(List<DialogOption> options)
-    {
-        currentOptions = options;
-        selectedOptionIndex = 0;
-        
-        // 不立即啟用選項UI，等待對話文字完成後再啟用
-        if (optionsText != null)
-        {
-            if (enableTerminalCursor) StartCoroutine(DisplayOptionsWithCursor());
-            else StartCoroutine(DisplayOptionsAfterDelay());
-        }
-    }
-    
-    private void OnOptionSelected(int nextId)
-    {
-        // 使用新的選項條件性下一個對話ID決定邏輯
-        int actualNextId = DetermineOptionNextDialogId(selectedOptionIndex, nextId);
-        
-        optionsText.gameObject.SetActive(false);
-        currentOptions.Clear();
-        
-        // 檢查是否應該結束對話
-        if (actualNextId <= 0) HideDialogUI();
-        else
-        {
-            currentDialogId = actualNextId;
-            StartCoroutine(DisplayNextLine());
-        }
     }
     
     /// <summary>
@@ -1172,15 +894,14 @@ public class DialogManager : UIPanel
     #endif
     }
     
-    // ==================== 新增：條件檢查系統 ====================
-    
+    // ==================== 條件檢查系統 ====================
     
     /// <summary>
     /// 決定起始對話ID
     /// </summary>
     /// <param name="fileName">對話文件名</param>
     /// <returns>起始對話ID</returns>
-    private int DetermineInitialDialogId(string fileName)
+    protected int DetermineInitialDialogId(string fileName)
     {
         if (currentDialogData == null)
         {
@@ -1207,13 +928,12 @@ public class DialogManager : UIPanel
         return defaultId;
     }
     
-    
     /// <summary>
     /// 決定下一個對話ID（用於沒有選項的對話）
     /// </summary>
     /// <param name="currentDialogId">當前對話ID</param>
     /// <returns>下一個對話ID</returns>
-    private int DetermineNextDialogId(int currentDialogId)
+    protected int DetermineNextDialogId(int currentDialogId)
     {
         if (currentDialogData == null)
         {
@@ -1262,7 +982,7 @@ public class DialogManager : UIPanel
     /// <param name="optionIndex">選項索引</param>
     /// <param name="defaultNextId">預設的下一個對話ID</param>
     /// <returns>實際的下一個對話ID</returns>
-    private int DetermineOptionNextDialogId(int optionIndex, int defaultNextId)
+    protected int DetermineOptionNextDialogId(int optionIndex, int defaultNextId)
     {
         if (currentDialogData == null)
         {
@@ -1339,5 +1059,4 @@ public class DialogManager : UIPanel
         Debug.Log($"使用選項預設下一個對話ID: {selectedOption.nextId}");
         return selectedOption.nextId;
     }
-
 }

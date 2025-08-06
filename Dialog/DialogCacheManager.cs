@@ -15,9 +15,9 @@ public static class DialogCacheManager
     /// </summary>
     private class CachedDialogData
     {
-        public DialogManager.DialogData dialogData;
+        public BaseDialogManager.DialogData dialogData;
         
-        public CachedDialogData(DialogManager.DialogData dialogData)
+        public CachedDialogData(BaseDialogManager.DialogData dialogData)
         {
             this.dialogData = dialogData;
         }
@@ -38,7 +38,7 @@ public static class DialogCacheManager
     /// </summary>
     /// <param name="fileName">文件名</param>
     /// <returns>緩存的對話數據，如果不存在則返回null</returns>
-    public static DialogManager.DialogData GetCachedDialogData(string fileName)
+    public static BaseDialogManager.DialogData GetCachedDialogData(string fileName)
     {
         if (dialogCache.TryGetValue(fileName, out CachedDialogData cachedData))
         {
@@ -53,7 +53,7 @@ public static class DialogCacheManager
     /// </summary>
     /// <param name="fileName">文件名</param>
     /// <param name="dialogData">對話數據</param>
-    public static void CacheDialog(string fileName, DialogManager.DialogData dialogData)
+    public static void CacheDialog(string fileName, BaseDialogManager.DialogData dialogData)
     {
         dialogCache[fileName] = new CachedDialogData(dialogData);
         Debug.Log($"已緩存對話數據: {fileName}");
