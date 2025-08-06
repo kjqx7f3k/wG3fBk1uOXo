@@ -46,9 +46,9 @@ public class ImprovedSceneMemoryAnalyzer : MonoBehaviour
         
         try
         {
-            long totalReserved = Profiler.GetTotalReservedMemory();
-            long totalAllocated = Profiler.GetTotalAllocatedMemory();
-            long totalUnused = Profiler.GetTotalUnusedReservedMemory();
+            long totalReserved = Profiler.GetTotalReservedMemoryLong();
+            long totalAllocated = Profiler.GetTotalAllocatedMemoryLong();
+            long totalUnused = Profiler.GetTotalUnusedReservedMemoryLong();
             long graphicsMemory = Profiler.GetAllocatedMemoryForGraphicsDriver();
             long managedMemory = System.GC.GetTotalMemory(false);
             

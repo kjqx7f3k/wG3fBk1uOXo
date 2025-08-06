@@ -122,7 +122,7 @@ public class SceneCreatureManager : MonoBehaviour
         else
         {
             // 註冊所有 ControllableCreature 組件
-            ControllableCreature[] ccs = FindObjectsOfType<ControllableCreature>();
+            ControllableCreature[] ccs = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
             
             foreach (ControllableCreature cc in ccs)
             {
@@ -156,7 +156,7 @@ public class SceneCreatureManager : MonoBehaviour
         else
         {
             // 註冊所有 ControllableCreature 組件
-            ControllableCreature[] creatures = FindObjectsOfType<ControllableCreature>();
+            ControllableCreature[] creatures = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
             
             foreach (ControllableCreature creature in creatures)
             {

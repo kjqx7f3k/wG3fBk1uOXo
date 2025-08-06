@@ -198,7 +198,7 @@ public class DialogManager : UIPanel
         }
     }
     
-    private void Awake()
+    protected override void Awake()
     {
         // 標準 Singleton 寫法，避免編輯器中的重複執行問題
         if (Instance != null && Instance != this)

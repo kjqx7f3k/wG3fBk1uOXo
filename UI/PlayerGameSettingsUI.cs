@@ -38,8 +38,11 @@ public class PlayerGameSettingsUI : UIPanel
     
     public bool IsSettingsUIOpen => IsOpen;
     
-    private void Awake()
+    protected override void Awake()
     {
+        // 調用基類的 Awake 方法
+        base.Awake();
+        
         // 設定UIPanel屬性
         pauseGameWhenOpen = true;   // 設定UI暫停遊戲
         blockCharacterMovement = true;  // 阻擋角色移動

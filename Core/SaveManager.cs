@@ -640,7 +640,7 @@ public class SaveManager : MonoBehaviour
         AllCreaturesInventoryData allInventoryData = new AllCreaturesInventoryData();
         
         // 查找所有ControllableCreature
-        ControllableCreature[] allControllableCreatures = FindObjectsOfType<ControllableCreature>();
+        ControllableCreature[] allControllableCreatures = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None); // 包含未激活 (等同於舊版的 true)
         
         foreach (ControllableCreature creature in allControllableCreatures)
         {
@@ -692,7 +692,7 @@ public class SaveManager : MonoBehaviour
         }
         
         // 查找所有ControllableCreature
-        ControllableCreature[] allControllableCreatures = FindObjectsOfType<ControllableCreature>();
+        ControllableCreature[] allControllableCreatures = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
         
         foreach (CreatureInventoryData creatureInventoryData in allInventoryData.creaturesInventories)
         {
@@ -766,7 +766,7 @@ public class SaveManager : MonoBehaviour
         List<CreatureData> creaturesData = new List<CreatureData>();
         
         // 查找所有Creature和ControllableCreature
-        Creature[] allCreatures = FindObjectsOfType<Creature>();
+        Creature[] allCreatures = FindObjectsByType<Creature>(FindObjectsSortMode.None);
         
         foreach (Creature creature in allCreatures)
         {
@@ -810,7 +810,7 @@ public class SaveManager : MonoBehaviour
     /// <param name="creaturesData">生物數據列表</param>
     private void LoadCreaturesData(List<CreatureData> creaturesData)
     {
-        Creature[] allCreatures = FindObjectsOfType<Creature>();
+        Creature[] allCreatures = FindObjectsByType<Creature>(FindObjectsSortMode.None);
         
         foreach (CreatureData creatureData in creaturesData)
         {

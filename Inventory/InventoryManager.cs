@@ -73,7 +73,7 @@ public class InventoryManager : UIPanel
     }
     public int SelectedItemIndex => selectedItemIndex;
     
-    private void Awake()
+    protected override void Awake()
     {
         base.Awake(); // 呼叫基底類別的Awake
         
@@ -703,7 +703,7 @@ public class InventoryManager : UIPanel
         if (player != null) return player;
         
         // 最後備用方案：尋找ControllableCreature組件
-        ControllableCreature creature = FindObjectOfType<ControllableCreature>();
+        ControllableCreature creature = FindFirstObjectByType<ControllableCreature>();
         if (creature != null) return creature.gameObject;
         
         return null;

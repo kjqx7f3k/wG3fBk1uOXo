@@ -58,7 +58,7 @@ public class SaveUIController : UIPanel
         [SerializeField] private float navigationCooldown = 0.2f; // 導航冷卻時間（秒）
         private float lastNavigationTime = 0f; // 上次導航的時間
 
-        private void Awake()
+        protected override void Awake()
         {
             base.Awake(); // 呼叫基底類別的Awake
             

@@ -19,7 +19,7 @@ public class PersistentPlayerControllerInputSystem : MonoBehaviour
                 if (_instance == null && !_isQuitting)
                 {
                     // 嘗試找到現有的實例
-                    _instance = FindObjectOfType<PersistentPlayerControllerInputSystem>();
+                    _instance = FindFirstObjectByType<PersistentPlayerControllerInputSystem>();
                     
                     // 如果沒有找到，創建一個新的
                     if (_instance == null)
@@ -323,7 +323,7 @@ public class PersistentPlayerControllerInputSystem : MonoBehaviour
         if (currentCamera == null)
         {
             // 如果沒有主攝影機，尋找任何攝影機
-            currentCamera = FindObjectOfType<Camera>();
+            currentCamera = FindFirstObjectByType<Camera>();
         }
         
         if (currentCamera != null)
@@ -392,7 +392,7 @@ public class PersistentPlayerControllerInputSystem : MonoBehaviour
     // private void AutoRegisterCreaturesInScene()
     // {
     //     // 自動註冊場景中所有的 Creature 組件
-    //     Creature[] creatures = FindObjectsOfType<Creature>();
+    //     Creature[] creatures = FindObjectsByType<Creature>();
         
     //     foreach (Creature creature in creatures)
     //     {
@@ -776,7 +776,7 @@ public class PersistentPlayerControllerInputSystem : MonoBehaviour
     /// </summary>
     private ControllableCreature FindCreatureByName(string creatureName)
     {
-        ControllableCreature[] allCreatures = FindObjectsOfType<ControllableCreature>();
+        ControllableCreature[] allCreatures = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
         
         foreach (ControllableCreature creature in allCreatures)
         {
@@ -977,7 +977,7 @@ public class PersistentPlayerControllerInputSystem : MonoBehaviour
     private void TryUseAlternativeCreature(CreatureTransferData data)
     {
         // 尋找場景中任何可用的生物
-        ControllableCreature[] allCreatures = FindObjectsOfType<ControllableCreature>();
+        ControllableCreature[] allCreatures = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
         
         if (allCreatures.Length > 0)
         {
@@ -1036,7 +1036,7 @@ public class PersistentPlayerControllerInputSystem : MonoBehaviour
     private void AutoRegisterCreaturesInScene()
     {
         // 獲取場景中所有的 Creature 組件
-        ControllableCreature[] creatures = FindObjectsOfType<ControllableCreature>();
+        ControllableCreature[] creatures = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
         
         // 獲取持久化生物的名稱列表
         HashSet<string> persistentCreatureNames = new HashSet<string>();
@@ -1177,7 +1177,7 @@ public class PersistentPlayerControllerInputSystem : MonoBehaviour
     private Camera FindSceneCamera(string cameraTag, string cameraName)
     {
         // 獲取場景中所有的攝影機
-        Camera[] allCameras = FindObjectsOfType<Camera>();
+        Camera[] allCameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
         
         Debug.Log($"場景中找到 {allCameras.Length} 個攝影機");
         

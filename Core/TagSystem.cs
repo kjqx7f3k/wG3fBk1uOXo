@@ -41,7 +41,7 @@ public class TagSystem : MonoBehaviour
         {
             if (instance == null)
             {
-                instance = FindObjectOfType<TagSystem>();
+                instance = FindFirstObjectByType<TagSystem>();
                 if (instance == null)
                 {
                     GameObject go = new GameObject("TagSystem");

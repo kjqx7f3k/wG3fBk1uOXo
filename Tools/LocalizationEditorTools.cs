@@ -117,7 +117,7 @@ public class LocalizationEditorTools : EditorWindow
         
         if (GUILayout.Button("Find FontManager in Scene"))
         {
-            var fontManager = FindObjectOfType<FontManager>();
+            var fontManager = FindFirstObjectByType<FontManager>();
             if (fontManager != null)
             {
                 Selection.activeGameObject = fontManager.gameObject;
@@ -143,7 +143,7 @@ public class LocalizationEditorTools : EditorWindow
         
         if (GUILayout.Button("Find DialogManager in Scene"))
         {
-            var dialogManager = FindObjectOfType<DialogManager>();
+            var dialogManager = FindFirstObjectByType<DialogManager>();
             if (dialogManager != null)
             {
                 Selection.activeGameObject = dialogManager.gameObject;
@@ -166,7 +166,7 @@ public class LocalizationEditorTools : EditorWindow
     private void ScanSceneForTextComponents()
     {
         sceneTextComponents.Clear();
-        var allTextComponents = FindObjectsOfType<TextMeshProUGUI>(true);
+        var allTextComponents = FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         
         foreach (var textComponent in allTextComponents)
         {
@@ -236,7 +236,7 @@ public class LocalizationEditorTools : EditorWindow
     
     private void CreateFontManager()
     {
-        var existing = FindObjectOfType<FontManager>();
+        var existing = FindFirstObjectByType<FontManager>();
         if (existing != null)
         {
             if (EditorUtility.DisplayDialog("FontManager Exists", 
@@ -309,7 +309,7 @@ public class FontManagerEditor : Editor
         
         if (GUILayout.Button("Scan and Register All Text Components"))
         {
-            var allTextComponents = FindObjectsOfType<TextMeshProUGUI>();
+            var allTextComponents = FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None);
             int count = 0;
             foreach (var textComponent in allTextComponents)
             {

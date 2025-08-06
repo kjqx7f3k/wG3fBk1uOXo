@@ -29,7 +29,7 @@ public class GameMenuManager : UIPanel
     
     public bool IsGameMenuOpen => IsOpen;
     
-    private void Awake()
+    protected override void Awake()
     {
         base.Awake(); // 呼叫基底類別的Awake
         

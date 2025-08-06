@@ -276,7 +276,7 @@ public class FontManager : MonoBehaviour
     /// <param name="fontConfig">字體配置</param>
     private void UpdateAllSceneTextComponents(LanguageFontConfig fontConfig)
     {
-        var allTextComponents = FindObjectsOfType<TextMeshProUGUI>(true);
+        var allTextComponents = FindObjectsByType<TextMeshProUGUI>(FindObjectsInactive.Include, FindObjectsSortMode.None); // 包含未激活 (等同於舊版的 true)
         foreach (var textComponent in allTextComponents)
         {
             // 檢查是否有 LocalizedFontUpdater 組件（如果有，則跳過自動更新）
