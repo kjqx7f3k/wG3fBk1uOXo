@@ -1,11 +1,10 @@
-### UI
-- game setting optimize layout
-
-
 ### Dialog
 - Event system (Need test)
 - json to binary conversion
 - inventory conditon impl
+
+### UI
+- game setting optimize layout
 
 ### Localization
 - UI test
