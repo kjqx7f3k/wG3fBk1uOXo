@@ -86,7 +86,7 @@ public abstract class BaseDialogManager : UIPanel
     [System.Serializable]
     public class InitialDialogCondition
     {
-        public DialogCondition condition;
+        public GameCondition condition;
         public int dialogId;
     }
     
@@ -97,7 +97,7 @@ public abstract class BaseDialogManager : UIPanel
         public int nextId;
         public int expressionId;
         public string text;
-        public DialogEvent[] events;
+        public GameEvent[] events;
         public NextDialogCondition[] nextDialogConditions; // 新增：下一個對話條件
         public DialogOptionEntry[] options;
     }
@@ -105,7 +105,7 @@ public abstract class BaseDialogManager : UIPanel
     [System.Serializable]
     public class NextDialogCondition
     {
-        public DialogCondition condition;
+        public GameCondition condition;
         public int nextId;
     }
     
@@ -114,7 +114,7 @@ public abstract class BaseDialogManager : UIPanel
     {
         public string text;
         public int nextId;
-        public DialogCondition condition; // 新增：選項顯示條件
+        public GameCondition condition; // 新增：選項顯示條件
         public string failText; // 新增：條件不滿足時的提示文本
         public ConditionalNextDialog[] conditionalNextDialogs; // 新增：條件性下一個對話
     }
@@ -122,27 +122,11 @@ public abstract class BaseDialogManager : UIPanel
     [System.Serializable]
     public class ConditionalNextDialog
     {
-        public DialogCondition condition;
+        public GameCondition condition;
         public int nextId;
     }
     
-    [System.Serializable]
-    public class DialogCondition
-    {
-        public string type; // 條件類型：TAG_CHECK, ITEM_OWNED, QUEST_STATUS, PLAYER_LEVEL 等
-        public string param; // 參數：tagId, itemId, questId 等
-        public string value; // 目標值：可以是數字或字串
-        public string @operator; // 比較運算子：EQUAL, GREATER_EQUAL, LESS_THAN, NOT_EQUAL 等
-    }
     
-    [System.Serializable]
-    public class DialogEvent
-    {
-        public string event_type; // 事件類型：update_tag, give_item, take_item 等
-        public string param1; // 第一個參數：tagId, itemId 等
-        public string param2; // 第二個參數：tag值, item數量 等
-        public DialogCondition condition; // 事件觸發條件
-    }
     
     public class DialogLine
     {
@@ -151,10 +135,10 @@ public abstract class BaseDialogManager : UIPanel
         public int expressionId;
         public string text;
         public string eventName;
-        public DialogEvent[] events;
+        public GameEvent[] events;
         public List<DialogOption> options;
         
-        public DialogLine(int id, int nextId, int expressionId, string text, DialogEvent[] events)
+        public DialogLine(int id, int nextId, int expressionId, string text, GameEvent[] events)
         {
             this.id = id;
             this.nextId = nextId;
@@ -569,7 +553,7 @@ public abstract class BaseDialogManager : UIPanel
             // 處理事件（在文字顯示完成後執行）
             if (currentLine.events != null && currentLine.events.Length > 0)
             {
-                DialogEventProcessor.ProcessDialogEvents(currentLine.events);
+                EventProcessor.ProcessEvents(currentLine.events);
             }
         }
         else
@@ -580,7 +564,7 @@ public abstract class BaseDialogManager : UIPanel
             // 即使沒有文字也要處理事件
             if (currentLine.events != null && currentLine.events.Length > 0)
             {
-                DialogEventProcessor.ProcessDialogEvents(currentLine.events);
+                EventProcessor.ProcessEvents(currentLine.events);
             }
         }
         
@@ -914,7 +898,7 @@ public abstract class BaseDialogManager : UIPanel
         {
             foreach (InitialDialogCondition condition in currentDialogData.initialDialogConditions)
             {
-                if (DialogConditionChecker.CheckCondition(condition.condition))
+                if (ConditionChecker.CheckCondition(condition.condition))
                 {
                     Debug.Log($"起始對話條件滿足，使用對話ID: {condition.dialogId}");
                     return condition.dialogId;
@@ -963,7 +947,7 @@ public abstract class BaseDialogManager : UIPanel
         {
             foreach (NextDialogCondition condition in currentEntry.nextDialogConditions)
             {
-                if (DialogConditionChecker.CheckCondition(condition.condition))
+                if (ConditionChecker.CheckCondition(condition.condition))
                 {
                     Debug.Log($"下一個對話條件滿足，跳轉到對話ID: {condition.nextId}");
                     return condition.nextId;
@@ -1014,7 +998,7 @@ public abstract class BaseDialogManager : UIPanel
         foreach (DialogOptionEntry optionEntry in currentEntry.options)
         {
             // 檢查選項是否應該顯示（與載入時的邏輯一致）
-            if (optionEntry.condition == null || DialogConditionChecker.CheckCondition(optionEntry.condition))
+            if (optionEntry.condition == null || ConditionChecker.CheckCondition(optionEntry.condition))
             {
                 if (actualOptionIndex == optionIndex)
                 {
@@ -1047,7 +1031,7 @@ public abstract class BaseDialogManager : UIPanel
         {
             foreach (ConditionalNextDialog conditionalNext in selectedOption.conditionalNextDialogs)
             {
-                if (DialogConditionChecker.CheckCondition(conditionalNext.condition))
+                if (ConditionChecker.CheckCondition(conditionalNext.condition))
                 {
                     Debug.Log($"選項條件性下一個對話條件滿足，跳轉到對話ID: {conditionalNext.nextId}");
                     return conditionalNext.nextId;

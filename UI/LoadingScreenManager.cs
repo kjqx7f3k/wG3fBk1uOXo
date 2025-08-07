@@ -4,26 +4,17 @@ using TMPro;
 using System.Collections;
 
 /// <summary>
-/// 載入畫面管理器 - 顯示載入進度和提示（持久化單例）
+/// 載入畫面管理器 - 顯示載入提示和視覺效果（Prefab 掛載模式）
 /// </summary>
-public class LoadingScreenManager : MonoBehaviour
+public class LoadingScreenManager : UIPanel
 {
     public static LoadingScreenManager Instance { get; private set; }
     
-    [Header("載入UI Prefab")]
-    [SerializeField] private GameObject loadingUIPrefab;
-    
-
-    private Slider progressBar;
-    private TextMeshProUGUI progressText;
-    private TextMeshProUGUI loadingTipText;
-    private TextMeshProUGUI sceneNameText;
-    private Image backgroundImage;
-    private GameObject loadingIcon;
-    
-    // 當前載入UI實例
-    private GameObject currentLoadingUI;
-    private Canvas loadingCanvas;
+    [Header("UI 組件引用")]
+    [SerializeField] private TextMeshProUGUI loadingTipText;
+    [SerializeField] private TextMeshProUGUI sceneNameText;
+    [SerializeField] private Image backgroundImage;
+    [SerializeField] private GameObject loadingIcon;
     
     [Header("載入提示")]
     [SerializeField] private string[] loadingTips = {
@@ -40,17 +31,19 @@ public class LoadingScreenManager : MonoBehaviour
     [Header("動畫設定")]
     [SerializeField] private float tipChangeInterval = 3f;
     [SerializeField] private float iconRotationSpeed = 90f;
-    [SerializeField] private AnimationCurve progressAnimationCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
     
-    private float currentProgress = 0f;
-    private float targetProgress = 0f;
     private string currentSceneName = "";
     private Coroutine tipRotationCoroutine;
-    private Coroutine progressAnimationCoroutine;
-    private bool isLoadingUIActive = false;
     
-    private void Awake()
+    protected override void Awake()
     {
+        base.Awake(); // 呼叫基底類別的Awake
+        
+        // 設定UIPanel屬性
+        pauseGameWhenOpen = false;      // 載入畫面不暫停遊戲
+        blockCharacterMovement = true;  // 阻擋角色移動
+        canCloseWithEscape = false;     // 不能用ESC關閉
+        
         // 單例模式
         if (Instance == null)
         {
@@ -67,76 +60,48 @@ public class LoadingScreenManager : MonoBehaviour
     
     private void Start()
     {
-        // 延遲綁定事件，確保GameSceneManager已經初始化
-        //RefreshUIReferences();
-        StartCoroutine(DelayedEventBinding());
-        
-    }
-    
-    /// <summary>
-    /// 延遲綁定事件
-    /// </summary>
-    private IEnumerator DelayedEventBinding()
-    {
-        // 等待幾幀確保GameSceneManager初始化
-        yield return new WaitForSeconds(0.1f);
-        
-        // // 嘗試綁定事件
-        // if (GameSceneManager.Instance != null)
-        // {
-        //     GameSceneManager.Instance.OnSceneLoadStarted += OnSceneLoadStarted;
-        //     GameSceneManager.Instance.OnSceneLoadProgress += OnSceneLoadProgress;
-        //     GameSceneManager.Instance.OnSceneLoadCompleted += OnSceneLoadCompleted;
-        //     Debug.Log("LoadingScreenManager: 成功綁定GameSceneManager事件");
-        // }
-        // else
-        // {
-        //     Debug.LogError("LoadingScreenManager: 找不到GameSceneManager實例！啟動備用進度模擬");
-        //     // 如果找不到GameSceneManager，啟動備用進度模擬
-        //     StartCoroutine(FallbackProgressSimulation());
-        // }
-    }
-    
-    /// <summary>
-    /// 備用進度模擬（當GameSceneManager不可用時）
-    /// </summary>
-    private IEnumerator FallbackProgressSimulation()
-    {
-        Debug.Log("LoadingScreenManager: 啟動備用進度模擬");
-        
-        float simulatedProgress = 0f;
-        float progressSpeed = 0.3f; // 每秒增加30%
-        
-        while (simulatedProgress < 1f)
+        // 確保面板初始為關閉狀態
+        if (panelCanvas != null)
         {
-            simulatedProgress += progressSpeed * Time.unscaledDeltaTime;
-            simulatedProgress = Mathf.Clamp01(simulatedProgress);
-            
-            targetProgress = simulatedProgress;
-            
-            // 啟動進度條動畫
-            if (progressAnimationCoroutine != null)
-            {
-                StopCoroutine(progressAnimationCoroutine);
-            }
-            progressAnimationCoroutine = StartCoroutine(AnimateProgress());
-            
-            Debug.Log($"LoadingScreenManager: 模擬進度 {simulatedProgress * 100:F1}%");
-            
-            yield return null;
+            panelCanvas.enabled = false;
         }
-        
-        // 確保顯示100%
-        SetProgress(1f);
-        Debug.Log("LoadingScreenManager: 備用進度模擬完成");
+        isOpen = false;
+        Debug.Log("LoadingScreenManager: 初始化為關閉狀態");
     }
     
     private void Update()
     {
         // 旋轉載入圖標
-        if (loadingIcon != null)
+        if (loadingIcon != null && IsOpen)
         {
             loadingIcon.transform.Rotate(0, 0, -iconRotationSpeed * Time.unscaledDeltaTime);
+        }
+    }
+    
+    /// <summary>
+    /// 面板開啟時調用 - 重寫UIPanel方法
+    /// </summary>
+    protected override void OnOpened()
+    {
+        base.OnOpened();
+        Debug.Log("載入畫面已開啟");
+        
+        InitializeLoadingScreen();
+    }
+    
+    /// <summary>
+    /// 面板關閉時調用 - 重寫UIPanel方法
+    /// </summary>
+    protected override void OnClosed()
+    {
+        base.OnClosed();
+        Debug.Log("載入畫面已關閉");
+        
+        // 停止提示輪播
+        if (tipRotationCoroutine != null)
+        {
+            StopCoroutine(tipRotationCoroutine);
+            tipRotationCoroutine = null;
         }
     }
     
@@ -146,19 +111,16 @@ public class LoadingScreenManager : MonoBehaviour
     private void InitializeLoadingScreen()
     {
         // 設置初始狀態
-        if (progressBar != null)
-        {
-            progressBar.value = 0f;
-        }
-        
-        if (progressText != null)
-        {
-            progressText.text = "0%";
-        }
-        
         if (sceneNameText != null)
         {
-            sceneNameText.text = "載入中...";
+            if (!string.IsNullOrEmpty(currentSceneName))
+            {
+                sceneNameText.text = $"載入場景: {currentSceneName}";
+            }
+            else
+            {
+                sceneNameText.text = "載入中...";
+            }
         }
         
         // 開始提示輪播
@@ -175,41 +137,7 @@ public class LoadingScreenManager : MonoBehaviour
     /// </summary>
     public void ShowLoadingUI()
     {
-        if (isLoadingUIActive) return;
-        
-        if (loadingUIPrefab != null)
-        {
-            // 實例化載入UI Prefab
-            currentLoadingUI = Instantiate(loadingUIPrefab);
-            
-            // 確保載入UI在最上層
-            loadingCanvas = currentLoadingUI.GetComponent<Canvas>();
-            if (loadingCanvas == null)
-            {
-                loadingCanvas = currentLoadingUI.AddComponent<Canvas>();
-            }
-            loadingCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            loadingCanvas.sortingOrder = 1000; // 確保在最上層
-            
-            // 添加GraphicRaycaster以支援UI互動
-            if (currentLoadingUI.GetComponent<GraphicRaycaster>() == null)
-            {
-                currentLoadingUI.AddComponent<GraphicRaycaster>();
-            }
-            
-            // 重新獲取UI組件引用
-            RefreshUIReferences();
-            
-            // 初始化載入畫面
-            InitializeLoadingScreen();
-            
-            isLoadingUIActive = true;
-            Debug.Log("LoadingScreenManager: 顯示載入UI");
-        }
-        else
-        {
-            Debug.LogWarning("LoadingScreenManager: 載入UI Prefab未設置！");
-        }
+        Open();
     }
     
     /// <summary>
@@ -217,166 +145,28 @@ public class LoadingScreenManager : MonoBehaviour
     /// </summary>
     public void HideLoadingUI()
     {
-        if (!isLoadingUIActive) return;
-        
-        // 停止所有協程
-        if (tipRotationCoroutine != null)
-        {
-            StopCoroutine(tipRotationCoroutine);
-            tipRotationCoroutine = null;
-        }
-        
-        if (progressAnimationCoroutine != null)
-        {
-            StopCoroutine(progressAnimationCoroutine);
-            progressAnimationCoroutine = null;
-        }
-        
-        // 銷毀載入UI
-        if (currentLoadingUI != null)
-        {
-            Destroy(currentLoadingUI);
-            currentLoadingUI = null;
-            loadingCanvas = null;
-        }
-        
-        // 清空UI組件引用
-        ClearUIReferences();
-        
-        isLoadingUIActive = false;
-        Debug.Log("LoadingScreenManager: 隱藏載入UI");
-    }
-    
-    /// <summary>
-    /// 重新獲取UI組件引用
-    /// </summary>
-    private void RefreshUIReferences()
-    {
-        if (currentLoadingUI == null) return;
-        
-        // 在載入UI中尋找組件
-        progressBar = loadingCanvas.GetComponentInChildren<Slider>();
-        progressText = FindUIComponent<TextMeshProUGUI>(currentLoadingUI, "ProgressText");
-        loadingTipText = FindUIComponent<TextMeshProUGUI>(currentLoadingUI, "LoadingTipText");
-        sceneNameText = FindUIComponent<TextMeshProUGUI>(currentLoadingUI, "SceneNameText");
-        backgroundImage = FindUIComponent<Image>(currentLoadingUI, "BackgroundImage");
-        loadingIcon = FindUIGameObject(currentLoadingUI, "LoadingIcon");
-        
-        Debug.Log($"LoadingScreenManager: UI組件引用更新完成 - ProgressBar: {progressBar != null}, ProgressText: {progressText != null}");
-    }
-    
-    /// <summary>
-    /// 清空UI組件引用
-    /// </summary>
-    private void ClearUIReferences()
-    {
-        progressBar = null;
-        progressText = null;
-        loadingTipText = null;
-        sceneNameText = null;
-        backgroundImage = null;
-        loadingIcon = null;
-    }
-    
-    /// <summary>
-    /// 尋找UI組件
-    /// </summary>
-    private T FindUIComponent<T>(GameObject parent, string name) where T : Component
-    {
-        Transform found = parent.transform.Find(name);
-        if (found != null)
-        {
-            return found.GetComponent<T>();
-        }
-        
-        // 如果直接尋找失敗，遞歸搜尋子物件
-        T[] components = parent.GetComponentsInChildren<T>();
-        foreach (T component in components)
-        {
-            if (component.name == name)
-            {
-                return component;
-            }
-        }
-        
-        return null;
-    }
-    
-    /// <summary>
-    /// 尋找UI GameObject
-    /// </summary>
-    private GameObject FindUIGameObject(GameObject parent, string name)
-    {
-        Transform found = parent.transform.Find(name);
-        if (found != null)
-        {
-            return found.gameObject;
-        }
-        
-        // 遞歸搜尋子物件
-        Transform[] allChildren = parent.GetComponentsInChildren<Transform>();
-        foreach (Transform child in allChildren)
-        {
-            if (child.name == name)
-            {
-                return child.gameObject;
-            }
-        }
-        
-        return null;
+        Close();
     }
     
     /// <summary>
     /// 場景載入開始事件
     /// </summary>
-    private void OnSceneLoadStarted(string sceneName)
+    public void OnSceneLoadStarted(string sceneName)
     {
         currentSceneName = sceneName;
         
         // 顯示載入UI
         ShowLoadingUI();
         
-        if (sceneNameText != null)
-        {
-            sceneNameText.text = $"載入場景: {sceneName}";
-        }
-        
         Debug.Log($"載入畫面: 開始載入場景 {sceneName}");
-    }
-    
-    /// <summary>
-    /// 場景載入進度事件
-    /// </summary>
-    private void OnSceneLoadProgress(string sceneName, float progress)
-    {
-        Debug.Log($"LoadingScreenManager: 收到進度事件 - 場景: {sceneName}, 進度: {progress * 100:F1}%");
-        
-        targetProgress = progress;
-        
-        // 啟動進度條動畫
-        if (progressAnimationCoroutine != null)
-        {
-            StopCoroutine(progressAnimationCoroutine);
-        }
-        progressAnimationCoroutine = StartCoroutine(AnimateProgress());
     }
     
     /// <summary>
     /// 場景載入完成事件
     /// </summary>
-    private void OnSceneLoadCompleted(string sceneName)
+    public void OnSceneLoadCompleted(string sceneName)
     {
         Debug.Log($"載入畫面: 場景 {sceneName} 載入完成");
-        
-        // 停止提示輪播
-        if (tipRotationCoroutine != null)
-        {
-            StopCoroutine(tipRotationCoroutine);
-            tipRotationCoroutine = null;
-        }
-        
-        // 確保進度條顯示100%
-        SetProgress(1f);
         
         // 顯示載入完成訊息
         if (loadingTipText != null)
@@ -393,7 +183,7 @@ public class LoadingScreenManager : MonoBehaviour
     /// </summary>
     private IEnumerator DelayedHideLoadingUI()
     {
-        // 等待一段時間讓用戶看到100%和完成訊息
+        // 等待一段時間讓用戶看到完成訊息
         yield return new WaitForSeconds(1f);
         
         // 隱藏載入UI
@@ -416,49 +206,6 @@ public class LoadingScreenManager : MonoBehaviour
             }
             
             yield return new WaitForSecondsRealtime(tipChangeInterval);
-        }
-    }
-    
-    /// <summary>
-    /// 進度條動畫
-    /// </summary>
-    private IEnumerator AnimateProgress()
-    {
-        float startProgress = currentProgress;
-        float animationTime = 0f;
-        float animationDuration = 0.5f;
-        
-        while (animationTime < animationDuration)
-        {
-            animationTime += Time.unscaledDeltaTime;
-            float normalizedTime = animationTime / animationDuration;
-            float curveValue = progressAnimationCurve.Evaluate(normalizedTime);
-            
-            currentProgress = Mathf.Lerp(startProgress, targetProgress, curveValue);
-            SetProgress(currentProgress);
-            
-            yield return null;
-        }
-        
-        currentProgress = targetProgress;
-        SetProgress(currentProgress);
-    }
-    
-    /// <summary>
-    /// 設置進度顯示
-    /// </summary>
-    private void SetProgress(float progress)
-    {
-        progress = Mathf.Clamp01(progress);
-        
-        if (progressBar != null)
-        {
-            progressBar.value = progress;
-        }
-        
-        if (progressText != null)
-        {
-            progressText.text = $"{progress * 100:F0}%";
         }
     }
     
@@ -533,23 +280,10 @@ public class LoadingScreenManager : MonoBehaviour
     
     private void OnDestroy()
     {
-        // // 取消事件監聽
-        // if (GameSceneManager.Instance != null)
-        // {
-        //     GameSceneManager.Instance.OnSceneLoadStarted -= OnSceneLoadStarted;
-        //     GameSceneManager.Instance.OnSceneLoadProgress -= OnSceneLoadProgress;
-        //     GameSceneManager.Instance.OnSceneLoadCompleted -= OnSceneLoadCompleted;
-        // }
-        
         // 停止協程
         if (tipRotationCoroutine != null)
         {
             StopCoroutine(tipRotationCoroutine);
-        }
-        
-        if (progressAnimationCoroutine != null)
-        {
-            StopCoroutine(progressAnimationCoroutine);
         }
     }
 }

@@ -1001,11 +1001,24 @@ public class InventoryManager : UIPanel
         // 如果總頁數只有一頁，則在頁內循環
         if (totalPages <= 1)
         {
-            if (itemsOnCurrentPage <= 1) return; // 如果只有一個項目且只有一頁，不導航
-            
-            int currentIndexInPage = selectedItemIndex - startIndex;
-            currentIndexInPage = (currentIndexInPage + direction + itemsOnCurrentPage) % itemsOnCurrentPage;
-            selectedItemIndex = startIndex + currentIndexInPage;
+            // 參考 SaveUIController 的正確邏輯：即使只有一個項目，也要允許選中
+            if (itemsOnCurrentPage <= 1)
+            {
+                // 如果只有一個項目，確保它被正確選中
+                if (itemsOnCurrentPage == 1)
+                {
+                    selectedItemIndex = startIndex; // 選中唯一的項目
+                }
+                // 如果沒有項目，不做任何處理
+                // 不返回，讓後續的UI更新邏輯執行
+            }
+            else
+            {
+                // 多個項目的循環邏輯
+                int currentIndexInPage = selectedItemIndex - startIndex;
+                currentIndexInPage = (currentIndexInPage + direction + itemsOnCurrentPage) % itemsOnCurrentPage;
+                selectedItemIndex = startIndex + currentIndexInPage;
+            }
         }
         else // --- 多頁情況下的換頁邏輯 ---
         {
@@ -1474,6 +1487,17 @@ public class InventoryManager : UIPanel
             currentNavIndex = -1;
         }
         
+        // 同步 currentNavIndex 與 selectedItemIndex
+        if (!isItemSelected && allItems.Count > 0 && selectedItemIndex >= 0)
+        {
+            // 在道具列表模式下，currentNavIndex 應該對應到當前頁中的項目位置
+            int startIndex = currentPage * itemsPerPage;
+            currentNavIndex = selectedItemIndex - startIndex;
+            
+            // 確保 currentNavIndex 在有效範圍內
+            currentNavIndex = Mathf.Clamp(currentNavIndex, 0, navigableButtons.Count - 1);
+        }
+        
         UpdateSelectionVisuals();
     }
     
@@ -1666,6 +1690,21 @@ public class InventoryManager : UIPanel
         
         // 初始化導航狀態
         isItemSelected = false;
+        
+        // 確保在有物品時正確初始化選中索引（即使只有一個物品）
+        if (allItems.Count > 0)
+        {
+            // 如果當前沒有選中任何項目，或選中的索引超出範圍，選中第一個
+            if (selectedItemIndex < 0 || selectedItemIndex >= allItems.Count)
+            {
+                selectedItemIndex = 0; // 選中第一個物品
+            }
+        }
+        else
+        {
+            selectedItemIndex = -1; // 沒有物品時重置選中索引
+        }
+        
         SetDefaultSelection();
         
         // 觸發選中事件

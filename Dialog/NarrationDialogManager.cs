@@ -145,13 +145,13 @@ public class NarrationDialogManager : BaseDialogManager
             id = 1,
             nextId = -1, // 結束對話
             text = text,
-            events = new DialogEvent[0],
+            events = new GameEvent[0],
             options = new DialogOptionEntry[0]
         };
         
         // 創建對話行
         var dialogLines = new Dictionary<int, DialogLine>();
-        dialogLines.Add(1, new DialogLine(1, -1, 0, text, new DialogEvent[0]));
+        dialogLines.Add(1, new DialogLine(1, -1, 0, text, new GameEvent[0]));
         
         // 設置對話數據
         SetDialogData(dialogLines, dialogData);

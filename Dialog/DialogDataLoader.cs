@@ -259,7 +259,7 @@ public static class DialogDataLoader
         foreach (BaseDialogManager.DialogOptionEntry optionEntry in optionEntries)
         {
             // 檢查選項是否應該顯示
-            if (optionEntry.condition == null || DialogConditionChecker.CheckCondition(optionEntry.condition))
+            if (optionEntry.condition == null || ConditionChecker.CheckCondition(optionEntry.condition))
             {
                 dialogLine.options.Add(new BaseDialogManager.DialogOption(optionEntry.text, optionEntry.nextId));
             }
