@@ -35,25 +35,46 @@ public static class EventProcessor
     /// <returns>是否應該執行</returns>
     private static bool ShouldExecuteEvent(GameEvent gameEvent)
     {
-        // 如果事件設定不使用條件檢查，直接返回 true
-        if (!gameEvent.useCondition)
+        // 新的簡化邏輯：檢查 conditions 陣列
+        if (gameEvent.conditions != null && gameEvent.conditions.Length > 0)
         {
-            Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 不使用條件檢查，直接執行");
-            return true;
+            Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 有 {gameEvent.conditions.Length} 個條件，使用 {gameEvent.conditionOperator} 邏輯");
+            bool result = ConditionChecker.CheckMultipleConditions(gameEvent.conditions, gameEvent.conditionOperator);
+            Debug.Log($"[EventProcessor] 條件檢查結果: {result}");
+            return result;
         }
         
-        // 如果設定使用條件檢查，但條件為 null，則返回 true（向後兼容）
-        if (gameEvent.condition == null)
+        // === JSON 向後兼容性檢查（優先檢查多重條件系統）===
+        if (gameEvent.useMultipleConditions)
         {
-            Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 啟用了條件檢查但 condition 為 null，視為無條件執行");
-            return true;
+            Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 使用舊格式多重條件檢查（JSON 兼容）");
+            bool result = ConditionChecker.CheckMultipleConditions(gameEvent.conditions, gameEvent.conditionOperator);
+            Debug.Log($"[EventProcessor] 舊格式多重條件檢查結果: {result}");
+            return result;
         }
+        
+        // 備選檢查舊格式單一條件系統（JSON 向後兼容）
+        if (gameEvent.useCondition)
+        {
+            Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 使用舊格式單一條件檢查（JSON 兼容）");
+            
+            // 如果設定使用條件檢查，但條件為 null，則返回 true（向後兼容）
+            if (gameEvent.condition == null)
+            {
+                Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 舊格式條件為 null，視為無條件執行");
+                return true;
+            }
 
-        Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 使用條件檢查，條件類型: {gameEvent.condition.type}");
-        bool result = ConditionChecker.CheckCondition(gameEvent.condition);
-        Debug.Log($"[EventProcessor] 條件檢查結果: {result}");
+            Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 舊格式條件類型: {gameEvent.condition.type}");
+            bool result = ConditionChecker.CheckCondition(gameEvent.condition);
+            Debug.Log($"[EventProcessor] 舊格式單一條件檢查結果: {result}");
+            
+            return result;
+        }
         
-        return result;
+        // 無條件執行（新格式：conditions 陣列為空，舊格式：沒有啟用任何條件檢查）
+        Debug.Log($"[EventProcessor] 事件 {gameEvent.event_type} 無條件執行");
+        return true;
     }
 
     /// <summary>

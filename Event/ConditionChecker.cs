@@ -7,6 +7,91 @@ using UnityEngine;
 public static class ConditionChecker
 {
     /// <summary>
+    /// 檢查多重條件是否滿足
+    /// </summary>
+    /// <param name="conditions">要檢查的條件陣列</param>
+    /// <param name="conditionOperator">條件間的邏輯運算子</param>
+    /// <returns>條件是否滿足</returns>
+    public static bool CheckMultipleConditions(GameCondition[] conditions, ConditionOperator conditionOperator)
+    {
+        // 如果條件陣列為 null 或空，視為無條件限制
+        if (conditions == null || conditions.Length == 0)
+        {
+            Debug.Log("[ConditionChecker] 條件陣列為空，返回 true（無條件限制）");
+            return true;
+        }
+        
+        Debug.Log($"[ConditionChecker] 開始檢查多重條件 - 共 {conditions.Length} 個條件，邏輯運算子: {conditionOperator}");
+        
+        try
+        {
+            switch (conditionOperator)
+            {
+                case ConditionOperator.AND:
+                    return CheckConditionsWithAnd(conditions);
+                    
+                case ConditionOperator.OR:
+                    return CheckConditionsWithOr(conditions);
+                    
+                default:
+                    Debug.LogWarning($"[ConditionChecker] 未知的邏輯運算子: {conditionOperator}，使用 AND 邏輯");
+                    return CheckConditionsWithAnd(conditions);
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[ConditionChecker] 檢查多重條件時發生錯誤: {e.Message}，返回 false");
+            return false;
+        }
+    }
+    
+    /// <summary>
+    /// 使用 AND 邏輯檢查條件陣列（所有條件都必須滿足）
+    /// </summary>
+    /// <param name="conditions">條件陣列</param>
+    /// <returns>是否所有條件都滿足</returns>
+    private static bool CheckConditionsWithAnd(GameCondition[] conditions)
+    {
+        for (int i = 0; i < conditions.Length; i++)
+        {
+            bool conditionResult = CheckCondition(conditions[i]);
+            Debug.Log($"[ConditionChecker] AND 邏輯 - 條件 {i + 1}/{conditions.Length}: {conditionResult}");
+            
+            if (!conditionResult)
+            {
+                Debug.Log($"[ConditionChecker] AND 邏輯失敗 - 條件 {i + 1} 不滿足，返回 false");
+                return false;
+            }
+        }
+        
+        Debug.Log($"[ConditionChecker] AND 邏輯成功 - 所有 {conditions.Length} 個條件都滿足，返回 true");
+        return true;
+    }
+    
+    /// <summary>
+    /// 使用 OR 邏輯檢查條件陣列（任一條件滿足即可）
+    /// </summary>
+    /// <param name="conditions">條件陣列</param>
+    /// <returns>是否有任一條件滿足</returns>
+    private static bool CheckConditionsWithOr(GameCondition[] conditions)
+    {
+        for (int i = 0; i < conditions.Length; i++)
+        {
+            bool conditionResult = CheckCondition(conditions[i]);
+            Debug.Log($"[ConditionChecker] OR 邏輯 - 條件 {i + 1}/{conditions.Length}: {conditionResult}");
+            
+            if (conditionResult)
+            {
+                Debug.Log($"[ConditionChecker] OR 邏輯成功 - 條件 {i + 1} 滿足，返回 true");
+                return true;
+            }
+        }
+        
+        Debug.Log($"[ConditionChecker] OR 邏輯失敗 - 所有 {conditions.Length} 個條件都不滿足，返回 false");
+        return false;
+    }
+    
+    /// <summary>
     /// 檢查條件是否滿足
     /// </summary>
     /// <param name="condition">要檢查的條件</param>

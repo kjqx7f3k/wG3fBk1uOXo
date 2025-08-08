@@ -29,6 +29,10 @@ public class Boids : Creature
     [SerializeField] private float avoidanceDistance = 3f;         // 避障距離
     [SerializeField] private LayerMask obstacleLayer = 1;          // 障礙物圖層
     
+    [Header("性能優化設定")]
+    [SerializeField] private bool usePhysicsSystem = false;        // 使用物理系統 (較重)
+    [SerializeField] private bool enableDebugLogs = false;         // 啟用調試日誌
+    
     // 私有變數
     private Rigidbody rb;
     private Vector3 velocity;
@@ -38,14 +42,47 @@ public class Boids : Creature
     // 靜態群集列表
     private static List<Boids> allBoids = new List<Boids>();
     
-    // 鄰居快取
-    private List<Boids> neighbors = new List<Boids>();
+    // 鄰居快取 (使用池化系統)
+    private List<Boids> neighbors;
     private float lastNeighborUpdate = 0f;
-    private const float neighborUpdateInterval = 0.1f; // 每0.1秒更新一次鄰居
+    private float neighborUpdateInterval = 0.1f; // 動態更新間隔，由 BoidsManager 控制
+    
+    // 搜尋方法控制
+    private NeighborSearchMethod currentSearchMethod = NeighborSearchMethod.Physics;
+    private BoidsManager boidsManager;
+    
+    // 頻率統計
+    private int neighborUpdateCount = 0;
+    private float lastFrequencyLog = 0f;
+    
+    // 性能優化：快取計算結果
+    private Vector3 cachedAcceleration = Vector3.zero;
+    private bool needsFlockingUpdate = true;
+    
+    // 距離平方快取 (避免重複計算)
+    private float detectionRadiusSquared;
+    private float separationRadiusSquared;
     
     protected override void Awake()
     {
         base.Awake();
+        
+        // 尋找 BoidsManager
+        boidsManager = FindFirstObjectByType<BoidsManager>();
+        
+        // 初始化池化的鄰居列表
+        if (boidsManager != null)
+        {
+            neighbors = boidsManager.GetNeighborsList();
+        }
+        else
+        {
+            neighbors = new List<Boids>(); // fallback
+        }
+        
+        // 預計算距離平方以避免重複計算
+        detectionRadiusSquared = detectionRadius * detectionRadius;
+        separationRadiusSquared = separationRadius * separationRadius;
         
         // 創建專用的群集狀態
         flockingState = new FlockingState(this, stateMachine);
@@ -67,20 +104,45 @@ public class Boids : Creature
     {
         base.GetRequiredComponents();
         
-        // 獲取或添加Rigidbody
-        rb = GetComponent<Rigidbody>();
-        if (rb == null)
+        if (usePhysicsSystem)
         {
-            rb = gameObject.AddComponent<Rigidbody>();
+            // 獲取或添加Rigidbody (重量級物理系統)
+            rb = GetComponent<Rigidbody>();
+            if (rb == null)
+            {
+                rb = gameObject.AddComponent<Rigidbody>();
+            }
+            
+            // 設置Rigidbody屬性
+            rb.useGravity = false;  // Boids通常不受重力影響
+            rb.linearDamping = 1f;  // 添加一些阻力
         }
-        
-        // 設置Rigidbody屬性
-        rb.useGravity = false;  // Boids通常不受重力影響
-        rb.linearDamping = 1f;           // 添加一些阻力
+        else
+        {
+            // 輕量級運動系統：移除 Rigidbody 以提升性能
+            rb = GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(rb);
+                }
+                else
+                {
+                    DestroyImmediate(rb);
+                }
+                rb = null;
+            }
+        }
         
         // 初始化速度
         velocity = transform.forward * maxSpeed * 0.5f;
-        rb.linearVelocity = velocity;
+        
+        // 如果使用物理系統，同步到 Rigidbody
+        if (usePhysicsSystem && rb != null)
+        {
+            rb.linearVelocity = velocity;
+        }
     }
     
     /// <summary>
@@ -88,31 +150,47 @@ public class Boids : Creature
     /// </summary>
     public void UpdateFlocking()
     {
+        // 檢查是否需要更新鄰居列表
         if (Time.time - lastNeighborUpdate > neighborUpdateInterval)
         {
             UpdateNeighbors();
             lastNeighborUpdate = Time.time;
+            neighborUpdateCount++;
+            needsFlockingUpdate = true; // 鄰居更新後需要重新計算群集行為
         }
         
-        // 重置加速度
-        acceleration = Vector3.zero;
-        
-        // 計算群集行為
-        Vector3 separation = Separate() * separationWeight;
-        Vector3 alignment = Align() * alignmentWeight;
-        Vector3 cohesion = Seek(Cohesion()) * cohesionWeight;
-        Vector3 avoidance = Avoid() * avoidanceWeight;
-        Vector3 boundary = StayInBounds() * boundaryForce;
-        
-        // 應用所有力
-        acceleration += separation;
-        acceleration += alignment;
-        acceleration += cohesion;
-        acceleration += avoidance;
-        acceleration += boundary;
-        
-        // 限制加速度
-        acceleration = Vector3.ClampMagnitude(acceleration, maxForce);
+        // 只有在需要時才重新計算群集行為（性能優化）
+        if (needsFlockingUpdate)
+        {
+            // 重置加速度
+            acceleration = Vector3.zero;
+            
+            // 計算群集行為
+            Vector3 separation = Separate() * separationWeight;
+            Vector3 alignment = Align() * alignmentWeight;
+            Vector3 cohesion = Seek(Cohesion()) * cohesionWeight;
+            Vector3 avoidance = Avoid() * avoidanceWeight;
+            Vector3 boundary = StayInBounds() * boundaryForce;
+            
+            // 應用所有力
+            acceleration += separation;
+            acceleration += alignment;
+            acceleration += cohesion;
+            acceleration += avoidance;
+            acceleration += boundary;
+            
+            // 限制加速度
+            acceleration = Vector3.ClampMagnitude(acceleration, maxForce);
+            
+            // 快取計算結果
+            cachedAcceleration = acceleration;
+            needsFlockingUpdate = false;
+        }
+        else
+        {
+            // 使用快取的加速度
+            acceleration = cachedAcceleration;
+        }
     }
     
     /// <summary>
@@ -124,8 +202,16 @@ public class Boids : Creature
         velocity += acceleration * Time.fixedDeltaTime;
         velocity = Vector3.ClampMagnitude(velocity, maxSpeed);
         
-        // 應用速度到Rigidbody
-        rb.linearVelocity = velocity;
+        if (usePhysicsSystem && rb != null)
+        {
+            // 使用物理系統 (較重但支援碰撞)
+            rb.linearVelocity = velocity;
+        }
+        else
+        {
+            // 使用輕量級運動系統 (較輕但無碰撞)
+            transform.position += velocity * Time.fixedDeltaTime;
+        }
         
         // 更新朝向
         if (velocity.magnitude > 0.1f)
@@ -133,27 +219,78 @@ public class Boids : Creature
             transform.rotation = Quaternion.LookRotation(velocity);
         }
     }
-    
-    /// <summary>
-    /// 更新鄰居列表
-    /// </summary>
+
+    private Collider[] neighborsBuffer = new Collider[600]; // 預先準備好一個陣列
     private void UpdateNeighbors()
     {
-        neighbors.Clear();
-        
-        foreach (Boids other in allBoids)
+        switch (currentSearchMethod)
         {
-            if (other != this && other != null && !other.IsDead)
-            {
-                float distance = Vector3.Distance(transform.position, other.transform.position);
-                if (distance < detectionRadius)
-                {
-                    neighbors.Add(other);
-                }
-            }
+            case NeighborSearchMethod.Physics:
+                UpdateNeighborsPhysics();
+                break;
+            case NeighborSearchMethod.SpatialGrid:
+                UpdateNeighborsSpatialGrid();
+                break;
         }
     }
     
+    /// <summary>
+    /// 使用物理引擎進行鄰居搜尋 (原有方法)
+    /// </summary>
+    private void UpdateNeighborsPhysics()
+    {
+        System.Diagnostics.Stopwatch stopwatch = null;
+        if (enableDebugLogs)
+        {
+            // 只在啟用調試模式時記錄時間
+            stopwatch = new System.Diagnostics.Stopwatch();
+            stopwatch.Start();
+        }
+
+        // 使用 OverlapSphereNonAlloc
+        int hitCount = Physics.OverlapSphereNonAlloc(transform.position, detectionRadius, neighborsBuffer);
+        neighbors.Clear();
+        for (int i = 0; i < hitCount; i++)
+        {
+            Boids other = neighborsBuffer[i].GetComponent<Boids>();
+            if (other != null && other != this && !other.IsDead) neighbors.Add(other);
+        }
+        
+        if (enableDebugLogs && stopwatch != null)
+        {
+            stopwatch.Stop();
+            UnityEngine.Debug.Log($"UpdateNeighbors (Physics) 執行時間: {stopwatch.Elapsed.TotalMilliseconds:F3} ms - 找到 {neighbors.Count} 個鄰居 @ {GetCurrentUpdateFrequency():F1} Hz");
+        }
+    }
+    
+    /// <summary>
+    /// 使用空間格子進行鄰居搜尋 (新方法)
+    /// </summary>
+    private void UpdateNeighborsSpatialGrid()
+    {
+        System.Diagnostics.Stopwatch stopwatch = null;
+        if (enableDebugLogs)
+        {
+            // 只在啟用調試模式時記錄時間
+            stopwatch = new System.Diagnostics.Stopwatch();
+            stopwatch.Start();
+        }
+
+        if (boidsManager != null)
+        {
+            boidsManager.QueryNeighborsUsingSpatialGrid(this, detectionRadius, neighbors);
+        }
+        else
+        {
+            neighbors.Clear();
+        }
+        
+        if (enableDebugLogs && stopwatch != null)
+        {
+            stopwatch.Stop();
+            UnityEngine.Debug.Log($"UpdateNeighbors (SpatialGrid) 執行時間: {stopwatch.Elapsed.TotalMilliseconds:F3} ms - 找到 {neighbors.Count} 個鄰居 @ {GetCurrentUpdateFrequency():F1} Hz");
+        }
+    }    
     /// <summary>
     /// 分離行為 - 避免與鄰近個體碰撞
     /// </summary>
@@ -161,15 +298,19 @@ public class Boids : Creature
     {
         Vector3 steer = Vector3.zero;
         int count = 0;
+        Vector3 myPosition = transform.position; // 快取位置
         
         foreach (Boids other in neighbors)
         {
-            float distance = Vector3.Distance(transform.position, other.transform.position);
+            Vector3 diff = myPosition - other.transform.position;
+            float distanceSquared = diff.sqrMagnitude; // 使用距離平方
             
-            if (distance < separationRadius && distance > 0)
+            if (distanceSquared < separationRadiusSquared && distanceSquared > 0)
             {
-                Vector3 diff = (transform.position - other.transform.position).normalized;
-                diff /= distance; // 距離越近，權重越大
+                // 使用距離平方的倒數作為權重 (避免開方運算)
+                float invDistance = 1f / Mathf.Sqrt(distanceSquared);
+                diff.Normalize();
+                diff *= invDistance;
                 steer += diff;
                 count++;
             }
@@ -191,25 +332,21 @@ public class Boids : Creature
     /// </summary>
     private Vector3 Align()
     {
+        if (neighbors.Count == 0) return Vector3.zero; // 提前退出優化
+        
         Vector3 sum = Vector3.zero;
-        int count = 0;
+        int count = neighbors.Count;
         
-        foreach (Boids other in neighbors)
+        // 直接累加，不使用 foreach 以減少迭代器開銷
+        for (int i = 0; i < count; i++)
         {
-            sum += other.velocity;
-            count++;
+            sum += neighbors[i].velocity;
         }
         
-        if (count > 0)
-        {
-            sum /= count;
-            sum = sum.normalized * maxSpeed;
-            Vector3 steer = sum - velocity;
-            steer = Vector3.ClampMagnitude(steer, maxForce);
-            return steer;
-        }
-        
-        return Vector3.zero;
+        sum /= count;
+        sum = sum.normalized * maxSpeed;
+        Vector3 steer = sum - velocity;
+        return Vector3.ClampMagnitude(steer, maxForce);
     }
     
     /// <summary>
@@ -217,22 +354,18 @@ public class Boids : Creature
     /// </summary>
     private Vector3 Cohesion()
     {
+        if (neighbors.Count == 0) return transform.position; // 提前退出優化
+        
         Vector3 sum = Vector3.zero;
-        int count = 0;
+        int count = neighbors.Count;
         
-        foreach (Boids other in neighbors)
+        // 直接累加位置，避免重複計算
+        for (int i = 0; i < count; i++)
         {
-            sum += other.transform.position;
-            count++;
+            sum += neighbors[i].transform.position;
         }
         
-        if (count > 0)
-        {
-            sum /= count;
-            return sum;
-        }
-        
-        return transform.position;
+        return sum / count;
     }
     
     /// <summary>
@@ -309,6 +442,10 @@ public class Boids : Creature
         separationRadius = separation;
         maxSpeed = speed;
         maxForce = force;
+        
+        // 重新計算距離平方快取
+        detectionRadiusSquared = detectionRadius * detectionRadius;
+        separationRadiusSquared = separationRadius * separationRadius;
     }
     
     /// <summary>
@@ -347,8 +484,77 @@ public class Boids : Creature
         return velocity;
     }
     
+    /// <summary>
+    /// 設置鄰居搜尋方法 (由 BoidsManager 調用)
+    /// </summary>
+    public void SetNeighborSearchMethod(NeighborSearchMethod method)
+    {
+        currentSearchMethod = method;
+    }
+    
+    /// <summary>
+    /// 獲取當前搜尋方法
+    /// </summary>
+    public NeighborSearchMethod GetCurrentSearchMethod()
+    {
+        return currentSearchMethod;
+    }
+    
+    /// <summary>
+    /// 設置鄰居更新頻率 (由 BoidsManager 調用)
+    /// </summary>
+    public void SetNeighborUpdateFrequency(float frequency)
+    {
+        neighborUpdateInterval = 1f / Mathf.Max(frequency, 0.1f);
+    }
+    
+    /// <summary>
+    /// 獲取當前更新頻率
+    /// </summary>
+    public float GetCurrentUpdateFrequency()
+    {
+        return 1f / neighborUpdateInterval;
+    }
+    
+    /// <summary>
+    /// 獲取頻率統計資訊
+    /// </summary>
+    public string GetFrequencyStats()
+    {
+        float currentTime = Time.time;
+        if (currentTime - lastFrequencyLog > 1f)
+        {
+            float actualFreq = neighborUpdateCount / (currentTime - lastFrequencyLog);
+            neighborUpdateCount = 0;
+            lastFrequencyLog = currentTime;
+            return $"實際更新頻率: {actualFreq:F1} Hz, 設定頻率: {GetCurrentUpdateFrequency():F1} Hz";
+        }
+        return "";
+    }
+    
+    /// <summary>
+    /// 設置性能相關參數 (由 BoidsManager 調用)
+    /// </summary>
+    public void SetPerformanceSettings(bool usePhysics, bool enableDebug)
+    {
+        if (usePhysicsSystem != usePhysics)
+        {
+            usePhysicsSystem = usePhysics;
+            // 重新初始化運動系統
+            GetRequiredComponents();
+        }
+        enableDebugLogs = enableDebug;
+    }
+    
     private void OnDestroy()
     {
+        // 歸還池化的鄰居列表
+        if (neighbors != null && boidsManager != null)
+        {
+            boidsManager.ReturnNeighborsList(neighbors);
+            neighbors = null;
+        }
+        
         // 從全局列表中移除
         if (allBoids.Contains(this))
         {
@@ -358,6 +564,8 @@ public class Boids : Creature
     
     protected override void OnDrawGizmosSelected()
     {
+        if (!enableDebugLogs) return; // 性能模式下不繪製 Gizmos
+        
         base.OnDrawGizmosSelected();
         
         // 繪製檢測半徑
@@ -383,6 +591,8 @@ public class Boids : Creature
     
     private void OnDrawGizmos()
     {
+        if (!enableDebugLogs) return; // 性能模式下不繪製 Gizmos
+        
         // 繪製與鄰居的連線
         if (neighbors != null)
         {
