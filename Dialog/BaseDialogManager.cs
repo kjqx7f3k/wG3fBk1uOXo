@@ -250,7 +250,7 @@ public abstract class BaseDialogManager : UIPanel
         // 應用程式退出時清理
     }
     
-    protected void HideDialogUI()
+    protected virtual void HideDialogUI()
     {
         // 停止對話游標閃爍協程
         if (dialogCursorBlinkCoroutine != null)
@@ -277,7 +277,7 @@ public abstract class BaseDialogManager : UIPanel
         Debug.Log($"隱藏{GetType().Name}");
         if (currentModel != null)
         {
-            currentModel.SetActive(false);
+            // 只清理引用，不改變模型的 active 狀態
             currentModel = null;
         }
         currentOptions.Clear();
@@ -300,7 +300,7 @@ public abstract class BaseDialogManager : UIPanel
         Debug.Log($"{GetType().Name}對話結束");
     }
     
-    protected void ShowDialogUI(GameObject model)
+    protected virtual void ShowDialogUI(GameObject model)
     {
         // 首先確保DialogPanel本身是啟用的，使用重寫的Open方法
         Open();
@@ -346,7 +346,7 @@ public abstract class BaseDialogManager : UIPanel
         
         if (currentModel != null)
         {
-            currentModel.SetActive(false);
+            // 只清理引用，不改變模型的 active 狀態
             currentModel = null;
         }
         currentOptions.Clear();
@@ -532,7 +532,19 @@ public abstract class BaseDialogManager : UIPanel
         }
         
         // 處理表情變化
-        // TODO: 根據expressionId更新模型表情
+        if (currentLine.expressionId > 0 && currentModel != null)
+        {
+            var animator = currentModel.GetComponent<Animator>();
+            if (animator != null)
+            {
+                // 將 expressionId 轉換為觸發器名稱，可以根據需要自定義映射
+                string triggerName = GetExpressionTriggerName(currentLine.expressionId);
+                if (!string.IsNullOrEmpty(triggerName))
+                {
+                    animator.SetTrigger(triggerName);
+                }
+            }
+        }
         
         // 重置對話終端效果變數
         currentDisplayText = "";
@@ -1042,5 +1054,22 @@ public abstract class BaseDialogManager : UIPanel
         // 如果沒有條件滿足，使用預設的nextId
         Debug.Log($"使用選項預設下一個對話ID: {selectedOption.nextId}");
         return selectedOption.nextId;
+    }
+    
+    /// <summary>
+    /// 將 expressionId 轉換為 Animator 觸發器名稱
+    /// </summary>
+    protected virtual string GetExpressionTriggerName(int expressionId)
+    {
+        // 可以根據專案需求自定義 ID 與觸發器名稱的對應關係
+        switch (expressionId)
+        {
+            case 1: return "Happy";
+            case 2: return "Sad"; 
+            case 3: return "Angry";
+            case 4: return "Surprised";
+            case 5: return "Neutral";
+            default: return null;
+        }
     }
 }

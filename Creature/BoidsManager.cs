@@ -10,6 +10,7 @@ public enum NeighborSearchMethod
     SpatialGrid     // 使用自定義空間格子系統
 }
 
+
 /// <summary>
 /// Boids群集管理器 - 用於批量創建和管理Boids群體
 /// </summary>
@@ -36,6 +37,13 @@ public class BoidsManager : MonoBehaviour
     [Header("邊界設定")]
     [SerializeField] private Vector3 boundaryCenter = Vector3.zero;
     [SerializeField] private Vector3 boundarySize = new Vector3(50, 20, 50);
+    [SerializeField, Range(0f, 10f)] private float boundaryForce = 2f;  // 邊界拉回力強度
+    
+    [Header("物理設定")]
+    [SerializeField, Range(0f, 1f)] private float boidsBounciness = 0.8f;    // 彈性係數
+    [SerializeField, Range(0f, 1f)] private float boidsFriction = 0.3f;      // 摩擦力
+    [SerializeField, Range(0.1f, 5f)] private float boidsMass = 1f;          // 質量
+    [SerializeField, Range(0f, 2f)] private float boidsDrag = 0.1f;          // 阻力
     
     [Header("運行時控制")]
     [SerializeField] private bool autoSpawn = true;                // 自動生成
@@ -49,23 +57,11 @@ public class BoidsManager : MonoBehaviour
     
     [Header("鄰居更新頻率設定")]
     [SerializeField, Range(1f, 60f)] private float neighborUpdateFrequency = 10f;  // 鄰居更新頻率 (Hz)
-    [SerializeField] private bool useAdaptiveFrequency = false;    // 使用自適應頻率
-    [SerializeField, Range(1f, 30f)] private float minFrequency = 5f;  // 最小頻率 (自適應模式)
-    [SerializeField, Range(10f, 60f)] private float maxFrequency = 30f; // 最大頻率 (自適應模式)
-    [SerializeField] private bool showFrequencyStats = true;       // 顯示頻率統計
     
     [Header("性能優化設定")]
-    [SerializeField] private bool usePhysicsSystem = false;        // 使用物理系統 (較重但支援碰撞)
+    [SerializeField] private bool usePhysicsSystem = true;         // 使用物理系統 (較重但支援碰撞)
     [SerializeField] private bool enableDebugLogs = false;         // 啟用調試日誌
     [SerializeField] private bool enableGizmoDrawing = true;       // 啟用Gizmo繪製
-    
-    [Header("智能容量管理")]
-    [SerializeField] private bool enableAdaptiveCapacity = true;   // 啟用自適應容量管理
-    [SerializeField, Range(2, 16)] private int minCapacity = 4;    // 最小初始容量
-    [SerializeField, Range(8, 64)] private int maxCapacity = 32;   // 最大初始容量
-    [SerializeField, Range(30f, 300f)] private float capacityUpdateInterval = 60f; // 容量更新間隔 (秒)
-    [SerializeField] private bool showCapacityStats = false;       // 顯示容量統計
-    [SerializeField] private bool autoOptimizeCapacity = true;     // 自動優化容量
     
     private List<Boids> spawnedBoids = new List<Boids>();
     private SpatialGrid spatialGrid;
@@ -75,17 +71,26 @@ public class BoidsManager : MonoBehaviour
     private TransformCache transformCache = new TransformCache();
     
     // 頻率控制相關變數
-    private float lastFrequencyUpdate = 0f;
     private float lastNeighborUpdateFrequency = 0f;
-    private int totalNeighborUpdates = 0;
-    private int savedComputations = 0;
-    private float frequencyUpdateInterval = 1f; // 每秒檢查一次自適應頻率
     
-    // 容量管理相關變數
-    private float lastCapacityUpdate = 0f;
-    private int currentOptimalCapacity = 8; // 當前計算的最佳容量
-    private bool capacityStatsCollected = false; // 是否已收集統計數據
-    private float capacityCollectionStartTime = 0f; // 開始收集統計數據的時間
+    // 公開屬性供 Boids 存取（唯讀）
+    public float DetectionRadius => detectionRadius;
+    public float SeparationRadius => separationRadius; 
+    public float MaxSpeed => maxSpeed;
+    public float MaxForce => maxForce;
+    public float SeparationWeight => separationWeight;
+    public float AlignmentWeight => alignmentWeight;
+    public float CohesionWeight => cohesionWeight;
+    public float AvoidanceWeight => avoidanceWeight;
+    public Vector3 BoundaryCenter => boundaryCenter;
+    public Vector3 BoundarySize => boundarySize;
+    public float BoundaryForce => boundaryForce;
+    public float BoidsBounciness => boidsBounciness;
+    public float BoidsFriction => boidsFriction;
+    public float BoidsMass => boidsMass;
+    public float BoidsDrag => boidsDrag;
+    public bool UsePhysicsSystem => usePhysicsSystem;
+    public bool EnableDebugLogs => enableDebugLogs;
     
     private void Start()
     {
@@ -122,19 +127,6 @@ public class BoidsManager : MonoBehaviour
             Debug.Log($"鄰居更新頻率設定為: {neighborUpdateFrequency} Hz");
         }
         
-        // 自適應頻率調整
-        if (useAdaptiveFrequency && Time.time - lastFrequencyUpdate > frequencyUpdateInterval)
-        {
-            UpdateAdaptiveFrequency();
-            lastFrequencyUpdate = Time.time;
-        }
-        
-        // 智能容量管理更新
-        if (enableAdaptiveCapacity && spatialGrid != null)
-        {
-            UpdateAdaptiveCapacity();
-        }
-        
         // 更新 Transform 緩存 (性能優化)
         transformCache.UpdateDirtyCache();
         
@@ -152,18 +144,6 @@ public class BoidsManager : MonoBehaviour
             {
                 Debug.Log(stats);
             }
-        }
-        
-        // 顯示頻率統計
-        if (showFrequencyStats)
-        {
-            ShowFrequencyStats();
-        }
-        
-        // 顯示容量統計
-        if (showCapacityStats && enableAdaptiveCapacity && spatialGrid != null)
-        {
-            ShowCapacityStats();
         }
     }
     
@@ -206,6 +186,10 @@ public class BoidsManager : MonoBehaviour
             Boids boids = boidsObj.GetComponent<Boids>();
             if (boids != null)
             {
+                // 新的參數同步方式（Boids 會自動從 BoidsManager 獲取參數）
+                boids.SyncParametersFromManager();
+                
+                // 保留舊的設置方法以確保兼容性
                 boids.SetFlockingParameters(detectionRadius, separationRadius, maxSpeed, maxForce);
                 boids.SetBehaviorWeights(separationWeight, alignmentWeight, cohesionWeight, avoidanceWeight);
                 boids.SetBoundary(boundaryCenter, boundarySize);
@@ -269,6 +253,10 @@ public class BoidsManager : MonoBehaviour
         {
             if (boids != null)
             {
+                // 使用新的參數同步機制
+                boids.SyncParametersFromManager();
+                
+                // 保留舊的方法調用以確保兼容性
                 boids.SetFlockingParameters(detectionRadius, separationRadius, maxSpeed, maxForce);
                 boids.SetBehaviorWeights(separationWeight, alignmentWeight, cohesionWeight, avoidanceWeight);
                 boids.SetBoundary(boundaryCenter, boundarySize);
@@ -291,6 +279,10 @@ public class BoidsManager : MonoBehaviour
         Boids boids = boidsObj.GetComponent<Boids>();
         if (boids != null)
         {
+            // 新的參數同步方式
+            boids.SyncParametersFromManager();
+            
+            // 保留舊的設置方法以確保兼容性
             boids.SetFlockingParameters(detectionRadius, separationRadius, maxSpeed, maxForce);
             boids.SetBehaviorWeights(separationWeight, alignmentWeight, cohesionWeight, avoidanceWeight);
             boids.SetBoundary(boundaryCenter, boundarySize);
@@ -373,20 +365,7 @@ public class BoidsManager : MonoBehaviour
     private void InitializeSpatialGrid()
     {
         Bounds worldBounds = new Bounds(boundaryCenter, boundarySize);
-        
-        // 根據設定決定初始容量
-        int initialCapacity = enableAdaptiveCapacity ? 
-            Mathf.Clamp(8, minCapacity, maxCapacity) : 8; // 預設仍為 8
-        
-        spatialGrid = new SpatialGrid(gridCellSize, worldBounds, initialCapacity, enableAdaptiveCapacity);
-        
-        // 如果啟用自適應容量，開始收集統計數據
-        if (enableAdaptiveCapacity)
-        {
-            capacityCollectionStartTime = Time.time;
-            capacityStatsCollected = false;
-            Debug.Log($"智能容量管理已啟用 - 初始容量: {initialCapacity}, 範圍: {minCapacity}-{maxCapacity}");
-        }
+        spatialGrid = new SpatialGrid(gridCellSize, worldBounds, 8, false);
     }
     
     /// <summary>
@@ -485,6 +464,19 @@ public class BoidsManager : MonoBehaviour
         }
     }
     
+    [ContextMenu("強制同步所有Boids參數")]
+    public void ForceParameterSync()
+    {
+        foreach (Boids boid in spawnedBoids)
+        {
+            if (boid != null)
+            {
+                boid.ForceParameterSync();
+            }
+        }
+        Debug.Log("BoidsManager: 已強制同步所有Boids參數");
+    }
+    
     /// <summary>
     /// 切換搜尋方法
     /// </summary>
@@ -516,7 +508,6 @@ public class BoidsManager : MonoBehaviour
         Debug.Log($"當前搜尋方法: {searchMethod}");
         Debug.Log($"格子大小: {gridCellSize}");
         Debug.Log($"鄰居更新頻率: {neighborUpdateFrequency} Hz");
-        Debug.Log($"自適應頻率: {(useAdaptiveFrequency ? "啟用" : "停用")}");
     }
     
     /// <summary>
@@ -524,57 +515,16 @@ public class BoidsManager : MonoBehaviour
     /// </summary>
     private void UpdateNeighborFrequency()
     {
-        float currentFreq = useAdaptiveFrequency ? CalculateAdaptiveFrequency() : neighborUpdateFrequency;
-        
         foreach (Boids boid in spawnedBoids)
         {
             if (boid != null)
             {
-                boid.SetNeighborUpdateFrequency(currentFreq);
+                boid.SetNeighborUpdateFrequency(neighborUpdateFrequency);
             }
         }
     }
     
-    /// <summary>
-    /// 自適應頻率更新
-    /// </summary>
-    private void UpdateAdaptiveFrequency()
-    {
-        float newFrequency = CalculateAdaptiveFrequency();
-        
-        foreach (Boids boid in spawnedBoids)
-        {
-            if (boid != null)
-            {
-                boid.SetNeighborUpdateFrequency(newFrequency);
-            }
-        }
-    }
     
-    /// <summary>
-    /// 計算自適應頻率
-    /// </summary>
-    private float CalculateAdaptiveFrequency()
-    {
-        if (spawnedBoids.Count == 0) return neighborUpdateFrequency;
-        
-        // 基於 Boids 數量的自適應頻率
-        float densityFactor = Mathf.InverseLerp(10, 200, spawnedBoids.Count);
-        float adaptiveFreq = Mathf.Lerp(maxFrequency, minFrequency, densityFactor);
-        
-        // 基於平均鄰居數量的調整
-        float avgNeighbors = GetAverageNeighborCount();
-        if (avgNeighbors > 10)
-        {
-            adaptiveFreq *= 0.8f; // 高密度時降低頻率
-        }
-        else if (avgNeighbors < 3)
-        {
-            adaptiveFreq *= 1.2f; // 低密度時提高頻率
-        }
-        
-        return Mathf.Clamp(adaptiveFreq, minFrequency, maxFrequency);
-    }
     
     /// <summary>
     /// 獲取平均鄰居數量
@@ -598,149 +548,12 @@ public class BoidsManager : MonoBehaviour
         return validBoids > 0 ? (float)totalNeighbors / validBoids : 0;
     }
     
-    /// <summary>
-    /// 顯示頻率統計
-    /// </summary>
-    private void ShowFrequencyStats()
-    {
-        float currentTime = Time.time;
-        if (currentTime - lastFrequencyUpdate > frequencyUpdateInterval)
-        {
-            float effectiveFreq = useAdaptiveFrequency ? CalculateAdaptiveFrequency() : neighborUpdateFrequency;
-            float maxPossibleUpdates = spawnedBoids.Count * 60f; // 假設60FPS
-            float actualUpdates = spawnedBoids.Count * effectiveFreq;
-            float savedRatio = (maxPossibleUpdates - actualUpdates) / maxPossibleUpdates * 100f;
-            
-            Debug.Log($"頻率統計 - 當前: {effectiveFreq:F1} Hz, 節省計算: {savedRatio:F1}%, 平均鄰居數: {GetAverageNeighborCount():F1}");
-        }
-    }
     
-    /// <summary>
-    /// 設置頻率的快速選項
-    /// </summary>
-    [ContextMenu("設為低頻率 (5Hz)")]
-    public void SetLowFrequency() => neighborUpdateFrequency = 5f;
     
-    [ContextMenu("設為中頻率 (15Hz)")]
-    public void SetMediumFrequency() => neighborUpdateFrequency = 15f;
     
-    [ContextMenu("設為高頻率 (30Hz)")]
-    public void SetHighFrequency() => neighborUpdateFrequency = 30f;
     
-    [ContextMenu("切換自適應頻率")]
-    public void ToggleAdaptiveFrequency() => useAdaptiveFrequency = !useAdaptiveFrequency;
     
-    /// <summary>
-    /// 智能容量管理更新邏輯
-    /// </summary>
-    private void UpdateAdaptiveCapacity()
-    {
-        float currentTime = Time.time;
-        
-        // 檢查是否需要更新容量
-        if (currentTime - lastCapacityUpdate > capacityUpdateInterval)
-        {
-            if (autoOptimizeCapacity)
-            {
-                int newOptimalCapacity = CalculateOptimalCapacity();
-                if (newOptimalCapacity != currentOptimalCapacity)
-                {
-                    currentOptimalCapacity = newOptimalCapacity;
-                    ApplyCapacityUpdate(newOptimalCapacity);
-                    Debug.Log($"智能容量已更新為: {newOptimalCapacity}");
-                }
-            }
-            lastCapacityUpdate = currentTime;
-        }
-        
-        // 標記統計數據收集完成 (30秒後)
-        if (!capacityStatsCollected && currentTime - capacityCollectionStartTime > 30f)
-        {
-            capacityStatsCollected = true;
-            Debug.Log("容量統計數據收集完成，開始智能優化");
-        }
-    }
     
-    /// <summary>
-    /// 計算最佳容量
-    /// </summary>
-    private int CalculateOptimalCapacity()
-    {
-        if (spatialGrid == null || !capacityStatsCollected) 
-            return currentOptimalCapacity;
-        
-        // 獲取空間格子的容量統計
-        var capacityStats = spatialGrid.GetCapacityStats();
-        if (capacityStats.averageBoidsPerCell <= 0) 
-            return currentOptimalCapacity;
-        
-        // 計算理想容量: 平均數量 * 1.5 + 標準差 + 緩衝區
-        float idealCapacity = capacityStats.averageBoidsPerCell * 1.5f + 
-                             capacityStats.standardDeviation + 2f;
-        
-        // 應用範圍限制
-        int optimalCapacity = Mathf.RoundToInt(idealCapacity);
-        return Mathf.Clamp(optimalCapacity, minCapacity, maxCapacity);
-    }
-    
-    /// <summary>
-    /// 應用容量更新
-    /// </summary>
-    private void ApplyCapacityUpdate(int newCapacity)
-    {
-        if (spatialGrid != null)
-        {
-            spatialGrid.UpdateOptimalCapacity(newCapacity);
-        }
-    }
-    
-    /// <summary>
-    /// 顯示容量統計
-    /// </summary>
-    private void ShowCapacityStats()
-    {
-        if (spatialGrid == null) return;
-        
-        float currentTime = Time.time;
-        if (currentTime - lastCapacityUpdate > 2f) // 每2秒顯示一次
-        {
-            var stats = spatialGrid.GetCapacityStats();
-            string statusText = capacityStatsCollected ? "已收集" : "收集中";
-            
-            Debug.Log($"容量統計 ({statusText}):\n" +
-                     $"當前最佳容量: {currentOptimalCapacity}\n" +
-                     $"平均每格 Boids: {stats.averageBoidsPerCell:F2}\n" +
-                     $"最大格子 Boids: {stats.maxBoidsInCell}\n" +
-                     $"容量利用率: {stats.capacityUtilization:P1}\n" +
-                     $"擴展次數: {stats.totalExpansions}");
-        }
-    }
-    
-    /// <summary>
-    /// 容量管理選單
-    /// </summary>
-    [ContextMenu("重置容量統計")]
-    public void ResetCapacityStats()
-    {
-        capacityStatsCollected = false;
-        capacityCollectionStartTime = Time.time;
-        currentOptimalCapacity = 8;
-        if (spatialGrid != null)
-        {
-            spatialGrid.ResetCapacityStats();
-        }
-        Debug.Log("容量統計已重置");
-    }
-    
-    [ContextMenu("顯示當前容量報告")]
-    public void ShowCapacityReport()
-    {
-        if (spatialGrid != null)
-        {
-            var stats = spatialGrid.GetCapacityStats();
-            Debug.Log($"詳細容量報告:\n{spatialGrid.GetDetailedCapacityReport()}");
-        }
-    }
     
     /// <summary>
     /// 性能優化選項
@@ -751,9 +564,7 @@ public class BoidsManager : MonoBehaviour
         usePhysicsSystem = false;
         enableDebugLogs = false;
         enableGizmoDrawing = false;
-        showFrequencyStats = false;
         showPerformanceStats = false;
-        showCapacityStats = false;
         UpdateSearchMethod();
         Debug.Log("性能模式已啟用 - 關閉物理系統、調試日誌和Gizmo繪製");
     }
@@ -764,9 +575,7 @@ public class BoidsManager : MonoBehaviour
         usePhysicsSystem = true;
         enableDebugLogs = true;
         enableGizmoDrawing = true;
-        showFrequencyStats = true;
         showPerformanceStats = true;
-        showCapacityStats = true;
         UpdateSearchMethod();
         Debug.Log("調試模式已啟用 - 開啟所有功能以便分析");
     }
@@ -777,9 +586,7 @@ public class BoidsManager : MonoBehaviour
         usePhysicsSystem = false;
         enableDebugLogs = false;
         enableGizmoDrawing = true;
-        showFrequencyStats = true;
         showPerformanceStats = false;
-        showCapacityStats = false;
         UpdateSearchMethod();
         Debug.Log("平衡模式已啟用 - 輕量級運動但保持視覺調試");
     }
@@ -896,15 +703,29 @@ public class BoidsManager : MonoBehaviour
             if (spawnedBoids.Count > 0)
             {
                 UpdateBoidsParameters();
+                // 通知所有 Boids 參數已更改
+                NotifyParameterChange();
             }
             
             // 如果格子大小改變，重新初始化格子系統
             if (spatialGrid != null)
             {
                 Bounds currentBounds = new Bounds(boundaryCenter, boundarySize);
-                int initialCapacity = enableAdaptiveCapacity ? 
-                    Mathf.Clamp(currentOptimalCapacity, minCapacity, maxCapacity) : 8;
-                spatialGrid = new SpatialGrid(gridCellSize, currentBounds, initialCapacity, enableAdaptiveCapacity);
+                spatialGrid = new SpatialGrid(gridCellSize, currentBounds, 8, false);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 通知所有 Boids 參數已更改
+    /// </summary>
+    private void NotifyParameterChange()
+    {
+        foreach (Boids boid in spawnedBoids)
+        {
+            if (boid != null)
+            {
+                boid.CheckParameterSync();
             }
         }
     }

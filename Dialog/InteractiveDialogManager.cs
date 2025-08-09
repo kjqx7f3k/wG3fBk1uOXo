@@ -13,6 +13,12 @@ public class InteractiveDialogManager : BaseDialogManager
 {
     public static InteractiveDialogManager Instance { get; private set; }
     
+    [Header("對話相機設定")]
+    [SerializeField] private Camera dialogCamera;
+    [SerializeField] private UnityEngine.UI.RawImage dialogCameraImage;
+    [SerializeField] private float dialogCameraDistance = 1.5f;
+    [SerializeField] private float dialogCameraHeight = 1.2f;
+    
     protected override void Awake()
     {
         // 標準 Singleton 寫法，避免編輯器中的重複執行問題
@@ -340,6 +346,69 @@ public class InteractiveDialogManager : BaseDialogManager
         
         // 更新選項顯示
         UpdateOptionsDisplay();
+    }
+    
+    /// <summary>
+    /// 啟用對話相機並定位到角色正前方
+    /// </summary>
+    private void SetupDialogCamera()
+    {
+        if (dialogCamera != null && currentModel != null)
+        {
+            // 啟用相機
+            dialogCamera.gameObject.SetActive(true);
+            
+            // 計算相機位置
+            Vector3 characterPosition = currentModel.transform.position;
+            Vector3 characterForward = currentModel.transform.forward;
+            
+            // 使用可配置的距離和高度
+            Vector3 cameraPosition = characterPosition + characterForward * dialogCameraDistance;
+            cameraPosition.y = characterPosition.y + dialogCameraHeight;
+            
+            dialogCamera.transform.position = cameraPosition;
+            dialogCamera.transform.LookAt(characterPosition + Vector3.up * dialogCameraHeight);
+        }
+        
+        // 啟用UI顯示
+        if (dialogCameraImage != null && dialogCamera != null && dialogCamera.targetTexture != null)
+        {
+            dialogCameraImage.gameObject.SetActive(true);
+        }
+    }
+    
+    /// <summary>
+    /// 停用對話相機
+    /// </summary>
+    private void DisableDialogCamera()
+    {
+        if (dialogCamera != null)
+        {
+            dialogCamera.gameObject.SetActive(false);
+        }
+        
+        if (dialogCameraImage != null)
+        {
+            dialogCameraImage.gameObject.SetActive(false);
+        }
+    }
+    
+    /// <summary>
+    /// 重寫ShowDialogUI來整合相機控制
+    /// </summary>
+    protected override void ShowDialogUI(GameObject model)
+    {
+        base.ShowDialogUI(model);
+        SetupDialogCamera();
+    }
+    
+    /// <summary>
+    /// 重寫HideDialogUI來整合相機控制
+    /// </summary>
+    protected override void HideDialogUI()
+    {
+        DisableDialogCamera();
+        base.HideDialogUI();
     }
 }
 

@@ -8,30 +8,36 @@ using System.Linq;
 /// </summary>
 public class Boids : Creature
 {
-    [Header("Boids 群集參數")]
-    [SerializeField] private float detectionRadius = 5f;            // 檢測半徑
-    [SerializeField] private float separationRadius = 2f;           // 分離半徑
-    [SerializeField] private float maxSpeed = 8f;                   // 最大速度
-    [SerializeField] private float maxForce = 3f;                   // 最大轉向力
+    // 群集參數快取 (從 BoidsManager 獲取)
+    private float detectionRadius;            // 檢測半徑
+    private float separationRadius;           // 分離半徑
+    private float maxSpeed;                   // 最大速度
+    private float maxForce;                   // 最大轉向力
     
-    [Header("行為權重")]
-    [SerializeField] private float separationWeight = 1.5f;        // 分離權重
-    [SerializeField] private float alignmentWeight = 1.0f;         // 對齊權重
-    [SerializeField] private float cohesionWeight = 1.0f;          // 聚合權重
-    [SerializeField] private float avoidanceWeight = 2.0f;         // 避障權重
+    // 行為權重快取 (從 BoidsManager 獲取)
+    private float separationWeight;        // 分離權重
+    private float alignmentWeight;         // 對齊權重
+    private float cohesionWeight;          // 聚合權重
+    private float avoidanceWeight;         // 避障權重
     
-    [Header("邊界設定")]
-    [SerializeField] private Vector3 boundaryCenter = Vector3.zero; // 邊界中心
-    [SerializeField] private Vector3 boundarySize = new Vector3(50, 20, 50); // 邊界大小
-    [SerializeField] private float boundaryForce = 5f;             // 邊界回彈力
+    // 邊界設定快取 (從 BoidsManager 獲取)
+    private Vector3 boundaryCenter; // 邊界中心
+    private Vector3 boundarySize; // 邊界大小
+    private float boundaryForce; // 邊界拉回力強度
+    
+    // 物理設定快取 (從 BoidsManager 獲取)
+    private float boidsBounciness; // 彈性係數
+    private float boidsFriction;   // 摩擦力
+    private float boidsMass;       // 質量
+    private float boidsDrag;       // 阻力
     
     [Header("避障設定")]
     [SerializeField] private float avoidanceDistance = 3f;         // 避障距離
     [SerializeField] private LayerMask obstacleLayer = 1;          // 障礙物圖層
     
-    [Header("性能優化設定")]
-    [SerializeField] private bool usePhysicsSystem = false;        // 使用物理系統 (較重)
-    [SerializeField] private bool enableDebugLogs = false;         // 啟用調試日誌
+    // 性能優化設定快取 (從 BoidsManager 獲取)
+    private bool usePhysicsSystem;        // 使用物理系統 (較重)
+    private bool enableDebugLogs;         // 啟用調試日誌
     
     // 私有變數
     private Rigidbody rb;
@@ -54,6 +60,7 @@ public class Boids : Creature
     // 頻率統計
     private int neighborUpdateCount = 0;
     private float lastFrequencyLog = 0f;
+    private float lastParameterSyncCheck = 0f; // 參數同步檢查計時器
     
     // 性能優化：快取計算結果
     private Vector3 cachedAcceleration = Vector3.zero;
@@ -62,6 +69,9 @@ public class Boids : Creature
     // 距離平方快取 (避免重複計算)
     private float detectionRadiusSquared;
     private float separationRadiusSquared;
+    
+    // 參數同步標記
+    private bool parametersInitialized = false;
     
     protected override void Awake()
     {
@@ -74,15 +84,19 @@ public class Boids : Creature
         if (boidsManager != null)
         {
             neighbors = boidsManager.GetNeighborsList();
+            // 從 BoidsManager 同步所有參數
+            SyncParametersFromManager();
         }
         else
         {
             neighbors = new List<Boids>(); // fallback
+            Debug.LogWarning($"{name}: 找不到 BoidsManager，使用預設參數");
+            // 設置預設參數值
+            SetDefaultParameters();
         }
         
         // 預計算距離平方以避免重複計算
-        detectionRadiusSquared = detectionRadius * detectionRadius;
-        separationRadiusSquared = separationRadius * separationRadius;
+        UpdateDistanceSquaredCache();
         
         // 創建專用的群集狀態
         flockingState = new FlockingState(this, stateMachine);
@@ -115,7 +129,45 @@ public class Boids : Creature
             
             // 設置Rigidbody屬性
             rb.useGravity = false;  // Boids通常不受重力影響
-            rb.linearDamping = 1f;  // 添加一些阻力
+            rb.mass = boidsMass;
+            rb.linearDamping = boidsDrag;
+            rb.angularDamping = 0.5f;
+            
+            // 確保有 Collider
+            Collider boidCollider = GetComponent<Collider>();
+            if (boidCollider == null)
+            {
+                boidCollider = gameObject.AddComponent<SphereCollider>();
+                ((SphereCollider)boidCollider).radius = 0.5f;
+                if (enableDebugLogs)
+                {
+                    Debug.Log($"{name}: 自動添加 SphereCollider");
+                }
+            }
+            
+            // 創建並應用彈性材質
+            PhysicsMaterial physicsMaterial = new PhysicsMaterial("BoidsMaterial");
+            physicsMaterial.bounciness = boidsBounciness;
+            
+            // 嘗試設定摩擦力（不同Unity版本可能有不同屬性名）
+            try
+            {
+                // Unity 2022+ 使用 staticFriction 和 dynamicFriction
+                physicsMaterial.staticFriction = boidsFriction;
+                physicsMaterial.dynamicFriction = boidsFriction;
+            }
+            catch
+            {
+                // 如果上述屬性不存在，就跳過摩擦力設定
+                if (enableDebugLogs)
+                {
+                    Debug.Log($"{name}: 無法設定摩擦力，跳過此設定");
+                }
+            }
+            
+            physicsMaterial.bounceCombine = PhysicsMaterialCombine.Maximum;
+            physicsMaterial.frictionCombine = PhysicsMaterialCombine.Average;
+            boidCollider.material = physicsMaterial;
         }
         else
         {
@@ -150,6 +202,13 @@ public class Boids : Creature
     /// </summary>
     public void UpdateFlocking()
     {
+        // 定期檢查參數同步（每秒檢查一次）
+        if (Time.time - lastParameterSyncCheck > 1f)
+        {
+            CheckParameterSync();
+            lastParameterSyncCheck = Time.time;
+        }
+        
         // 檢查是否需要更新鄰居列表
         if (Time.time - lastNeighborUpdate > neighborUpdateInterval)
         {
@@ -170,7 +229,7 @@ public class Boids : Creature
             Vector3 alignment = Align() * alignmentWeight;
             Vector3 cohesion = Seek(Cohesion()) * cohesionWeight;
             Vector3 avoidance = Avoid() * avoidanceWeight;
-            Vector3 boundary = StayInBounds() * boundaryForce;
+            Vector3 boundary = StayInBounds();
             
             // 應用所有力
             acceleration += separation;
@@ -204,8 +263,21 @@ public class Boids : Creature
         
         if (usePhysicsSystem && rb != null)
         {
-            // 使用物理系統 (較重但支援碰撞)
-            rb.linearVelocity = velocity;
+            // 使用 AddForce 而不是直接設定 velocity，以保留碰撞反彈
+            Vector3 targetVelocity = velocity;
+            Vector3 velocityDifference = targetVelocity - rb.linearVelocity;
+            
+            // 只在速度差異較大時施加力，避免覆蓋碰撞反彈
+            if (velocityDifference.magnitude > 0.1f)
+            {
+                rb.AddForce(velocityDifference * 10f, ForceMode.Force);
+            }
+            
+            // 限制最大速度，但不覆蓋整個速度向量
+            if (rb.linearVelocity.magnitude > maxSpeed)
+            {
+                rb.linearVelocity = rb.linearVelocity.normalized * maxSpeed;
+            }
         }
         else
         {
@@ -414,23 +486,137 @@ public class Boids : Creature
     }
     
     /// <summary>
-    /// 邊界約束 - 保持在指定區域內
+    /// 簡單邊界拉回力 - 當 boid 接近或超出邊界時施加拉回力
     /// </summary>
     private Vector3 StayInBounds()
     {
+        if (boundaryForce <= 0) return Vector3.zero;
+        
+        Vector3 currentPos = transform.position;
+        Vector3 boundaryMin = boundaryCenter - boundarySize * 0.5f;
+        Vector3 boundaryMax = boundaryCenter + boundarySize * 0.5f;
         Vector3 force = Vector3.zero;
-        Vector3 position = transform.position;
-        Vector3 min = boundaryCenter - boundarySize * 0.5f;
-        Vector3 max = boundaryCenter + boundarySize * 0.5f;
         
-        if (position.x < min.x) force.x = maxSpeed;
-        if (position.x > max.x) force.x = -maxSpeed;
-        if (position.y < min.y) force.y = maxSpeed;
-        if (position.y > max.y) force.y = -maxSpeed;
-        if (position.z < min.z) force.z = maxSpeed;
-        if (position.z > max.z) force.z = -maxSpeed;
+        // 檢查每個軸向的邊界
+        if (currentPos.x < boundaryMin.x)
+            force.x = (boundaryMin.x - currentPos.x) * boundaryForce;
+        else if (currentPos.x > boundaryMax.x)
+            force.x = (boundaryMax.x - currentPos.x) * boundaryForce;
+            
+        if (currentPos.y < boundaryMin.y)
+            force.y = (boundaryMin.y - currentPos.y) * boundaryForce;
+        else if (currentPos.y > boundaryMax.y)
+            force.y = (boundaryMax.y - currentPos.y) * boundaryForce;
+            
+        if (currentPos.z < boundaryMin.z)
+            force.z = (boundaryMin.z - currentPos.z) * boundaryForce;
+        else if (currentPos.z > boundaryMax.z)
+            force.z = (boundaryMax.z - currentPos.z) * boundaryForce;
         
-        return force;
+        return Vector3.ClampMagnitude(force, maxForce);
+    }
+    
+    
+    
+    
+    /// <summary>
+    /// 從 BoidsManager 同步所有參數
+    /// </summary>
+    public void SyncParametersFromManager()
+    {
+        if (boidsManager == null) return;
+        
+        // 獲取群集參數
+        detectionRadius = boidsManager.DetectionRadius;
+        separationRadius = boidsManager.SeparationRadius;
+        maxSpeed = boidsManager.MaxSpeed;
+        maxForce = boidsManager.MaxForce;
+        
+        // 獲取行為權重
+        separationWeight = boidsManager.SeparationWeight;
+        alignmentWeight = boidsManager.AlignmentWeight;
+        cohesionWeight = boidsManager.CohesionWeight;
+        avoidanceWeight = boidsManager.AvoidanceWeight;
+        
+        // 獲取邊界設定
+        boundaryCenter = boidsManager.BoundaryCenter;
+        boundarySize = boidsManager.BoundarySize;
+        boundaryForce = boidsManager.BoundaryForce;
+        
+        // 獲取物理設定
+        boidsBounciness = boidsManager.BoidsBounciness;
+        boidsFriction = boidsManager.BoidsFriction;
+        boidsMass = boidsManager.BoidsMass;
+        boidsDrag = boidsManager.BoidsDrag;
+        
+        // 獲取性能設定
+        usePhysicsSystem = boidsManager.UsePhysicsSystem;
+        enableDebugLogs = boidsManager.EnableDebugLogs;
+        
+        parametersInitialized = true;
+        UpdateDistanceSquaredCache();
+    }
+    
+    /// <summary>
+    /// 設置預設參數值（當找不到 BoidsManager 時使用）
+    /// </summary>
+    private void SetDefaultParameters()
+    {
+        // 預設群集參數
+        detectionRadius = 5f;
+        separationRadius = 2f;
+        maxSpeed = 8f;
+        maxForce = 3f;
+        
+        // 預設行為權重
+        separationWeight = 1.5f;
+        alignmentWeight = 1.0f;
+        cohesionWeight = 1.0f;
+        avoidanceWeight = 2.0f;
+        
+        // 預設邊界設定
+        boundaryCenter = Vector3.zero;
+        boundarySize = new Vector3(50, 20, 50);
+        boundaryForce = 2f;
+        
+        // 預設物理設定
+        boidsBounciness = 0.8f;
+        boidsFriction = 0.3f;
+        boidsMass = 1f;
+        boidsDrag = 0.1f;
+        
+        // 預設性能設定
+        usePhysicsSystem = false;
+        enableDebugLogs = false;
+        
+        parametersInitialized = true;
+        UpdateDistanceSquaredCache();
+    }
+    
+    /// <summary>
+    /// 更新距離平方快取
+    /// </summary>
+    private void UpdateDistanceSquaredCache()
+    {
+        detectionRadiusSquared = detectionRadius * detectionRadius;
+        separationRadiusSquared = separationRadius * separationRadius;
+    }
+    
+    /// <summary>
+    /// 檢查是否需要重新同步參數
+    /// </summary>
+    public void CheckParameterSync()
+    {
+        if (boidsManager != null && parametersInitialized)
+        {
+            // 簡單的參數一致性檢查
+            if (Mathf.Abs(detectionRadius - boidsManager.DetectionRadius) > 0.01f ||
+                Mathf.Abs(maxSpeed - boidsManager.MaxSpeed) > 0.01f)
+            {
+                SyncParametersFromManager();
+                needsFlockingUpdate = true; // 參數改變後需要重新計算
+            }
+        }
     }
     
     /// <summary>
@@ -499,6 +685,20 @@ public class Boids : Creature
     {
         return currentSearchMethod;
     }
+    
+    /// <summary>
+    /// 強制從 BoidsManager 重新同步參數
+    /// </summary>
+    public void ForceParameterSync()
+    {
+        SyncParametersFromManager();
+        needsFlockingUpdate = true;
+    }
+    
+    /// <summary>
+    /// 獲取參數是否已初始化
+    /// </summary>
+    public bool IsParametersInitialized => parametersInitialized;
     
     /// <summary>
     /// 設置鄰居更新頻率 (由 BoidsManager 調用)
@@ -584,9 +784,12 @@ public class Boids : Creature
         Gizmos.color = Color.yellow;
         Gizmos.DrawRay(transform.position, transform.forward * avoidanceDistance);
         
-        // 繪製邊界
-        Gizmos.color = Color.white;
-        Gizmos.DrawWireCube(boundaryCenter, boundarySize);
+        // 繪製邊界框（當啟用邊界力時）
+        if (boundaryForce > 0)
+        {
+            Gizmos.color = Color.white;
+            Gizmos.DrawWireCube(boundaryCenter, boundarySize);
+        }
     }
     
     private void OnDrawGizmos()
@@ -604,6 +807,17 @@ public class Boids : Creature
                     Gizmos.DrawLine(transform.position, neighbor.transform.position);
                 }
             }
+        }
+    }
+    
+    /// <summary>
+    /// 碰撞事件處理 - 用於調試和增強碰撞效果
+    /// </summary>
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (enableDebugLogs)
+        {
+            Debug.Log($"{name} 碰撞到 {collision.gameObject.name}，碰撞速度: {collision.relativeVelocity.magnitude:F2}");
         }
     }
 }
