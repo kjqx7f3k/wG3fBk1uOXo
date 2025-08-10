@@ -17,6 +17,10 @@ public class InventoryManager : UIPanel
     [SerializeField] private Button discardButton;
     [SerializeField] private Button equipButton;
     
+    [Header("3D 預覽系統")]
+    [SerializeField] private Item3DPreviewSystem previewSystem;
+    [SerializeField] private RawImage previewDisplay;
+    
     [Header("Prefab設定")]
     [SerializeField] private GameObject itemSlotPrefab;
     
@@ -1231,36 +1235,25 @@ public class InventoryManager : UIPanel
         ClearPreviewArea();
         
         Item selectedItem = SelectedItem;
-        if (selectedItem == null) return;
-        
-        // 暫時跳過3D預覽功能，因為Item類還沒有ItemPrefab屬性
-        // 可以在未來添加ItemPrefab屬性到Item類後啟用此功能
-        
-        // TODO: 在Item類中添加ItemPrefab屬性後啟用以下代碼
-        /*
-        if (selectedItem.ItemPrefab != null)
+        if (selectedItem == null) 
         {
-            currentPreviewObject = Instantiate(selectedItem.ItemPrefab, itemPreviewArea);
-            
-            // 調整預覽物件的位置和大小
-            currentPreviewObject.transform.localPosition = Vector3.zero;
-            currentPreviewObject.transform.localRotation = Quaternion.identity;
-            currentPreviewObject.transform.localScale = Vector3.one;
-            
-            // 移除可能的碰撞器和剛體（預覽不需要物理）
-            Collider[] colliders = currentPreviewObject.GetComponentsInChildren<Collider>();
-            foreach (Collider col in colliders)
+            // 隱藏 3D 預覽
+            if (previewSystem != null)
             {
-                col.enabled = false;
+                previewSystem.HidePreview();
             }
-            
-            Rigidbody[] rigidbodies = currentPreviewObject.GetComponentsInChildren<Rigidbody>();
-            foreach (Rigidbody rb in rigidbodies)
-            {
-                rb.isKinematic = true;
-            }
+            return;
         }
-        */
+        
+        // 使用 3D 預覽系統顯示選中道具
+        if (previewSystem != null)
+        {
+            previewSystem.ShowItemPreview(selectedItem);
+        }
+        else
+        {
+            Debug.LogWarning("[InventoryManager] Item3DPreviewSystem 未設置！請在Inspector中指定previewSystem引用。");
+        }
     }
     
     /// <summary>

@@ -21,6 +21,14 @@ public class Item : ScriptableObject
     [SerializeField] private bool isUsable = false;
     [SerializeField] private bool isConsumable = false;
     
+    [Header("3D 預覽設定")]
+    [SerializeField] private GameObject itemPrefab3D;           // 3D 模型 prefab
+    [SerializeField] private Vector3 previewScale = Vector3.one; // 預覽縮放
+    [SerializeField] private Vector3 previewRotation;           // 初始旋轉角度
+    [SerializeField] private Vector3 previewPosition;           // 相對位置偏移
+    [SerializeField] private bool enableAutoRotation = true;    // 是否自動旋轉
+    [SerializeField] private Vector3 rotationSpeed = new Vector3(0, 45, 0); // 旋轉速度
+    
     public int Id => itemId;
     public string Name => itemName;
     public string Description => description;
@@ -31,6 +39,14 @@ public class Item : ScriptableObject
     public int Value => value;
     public bool IsUsable => isUsable;
     public bool IsConsumable => isConsumable;
+    
+    // 3D 預覽屬性
+    public GameObject ItemPrefab3D => itemPrefab3D;
+    public Vector3 PreviewScale => previewScale;
+    public Vector3 PreviewRotation => previewRotation;
+    public Vector3 PreviewPosition => previewPosition;
+    public bool EnableAutoRotation => enableAutoRotation;
+    public Vector3 RotationSpeed => rotationSpeed;
     
     /// <summary>
     /// 使用物品
