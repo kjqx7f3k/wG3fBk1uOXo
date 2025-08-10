@@ -133,16 +133,17 @@ public class EventTrigger : MonoBehaviour
     {
         if (playerTransform == null && !hasSearchedForPlayer)
         {
-            // 只搜尋一次，避免每幀執行 FindWithTag
-            var player = GameObject.FindWithTag("Player");
-            if (player != null)
+            // 使用統一的生物管理系統獲取當前控制的生物
+            if (SceneCreatureManager.Instance?.CurrentControlledCreature != null)
             {
-                playerTransform = player.transform;
+                playerTransform = SceneCreatureManager.Instance.CurrentControlledCreature.GetTransform();
+                if (debugMode)
+                    Debug.Log($"[EventTrigger] {name}: 從 SceneCreatureManager 獲取到玩家引用");
             }
             else
             {
                 if (debugMode)
-                    Debug.LogWarning($"[EventTrigger] {name}: 找不到玩家物件，無法檢查接近條件");
+                    Debug.LogWarning($"[EventTrigger] {name}: 無法從 SceneCreatureManager 獲取當前控制的生物");
             }
             hasSearchedForPlayer = true;
         }

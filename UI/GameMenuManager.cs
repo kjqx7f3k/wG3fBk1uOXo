@@ -76,34 +76,98 @@ public class GameMenuManager : UIPanel
             panelCanvas.enabled = false;
         }
         isOpen = false;
+        
+        // 延遲訂閱事件，確保 InputSystemWrapper 已初始化
+        StartCoroutine(DelayedEventSubscription());
+    }
+    
+    /// <summary>
+    /// 延遲事件訂閱協程，確保 InputSystemWrapper 已初始化
+    /// </summary>
+    private System.Collections.IEnumerator DelayedEventSubscription()
+    {
+        // 等待 InputSystemWrapper 初始化
+        int waitCount = 0;
+        while (InputSystemWrapper.Instance == null && waitCount < 100) // 最多等待100幀
+        {
+            waitCount++;
+            yield return null;
+        }
+        
+        if (InputSystemWrapper.Instance != null)
+        {
+            // 安全訂閱事件
+            SubscribeToInputEvents();
+            Debug.Log("[GameMenuManager] 延遲事件訂閱成功");
+        }
+        else
+        {
+            Debug.LogError("[GameMenuManager] 無法獲取 InputSystemWrapper 實例，事件訂閱失敗！");
+        }
+    }
+    
+    /// <summary>
+    /// 訂閱輸入事件
+    /// </summary>
+    private void SubscribeToInputEvents()
+    {
+        if (InputSystemWrapper.Instance != null)
+        {
+            InputSystemWrapper.Instance.OnUICancel += HandleCancelInput;
+            Debug.Log("[GameMenuManager] 已訂閱輸入事件 - Cancel");
+        }
+        else
+        {
+            Debug.LogError("[GameMenuManager] InputSystemWrapper.Instance 為 null，無法訂閱事件");
+        }
+    }
+    
+    /// <summary>
+    /// 取消訂閱輸入事件
+    /// </summary>
+    private void UnsubscribeFromInputEvents()
+    {
+        if (InputSystemWrapper.Instance != null)
+        {
+            InputSystemWrapper.Instance.OnUICancel -= HandleCancelInput;
+            Debug.Log("[GameMenuManager] 已取消訂閱輸入事件");
+        }
+    }
+    
+    private void OnEnable()
+    {
+        // 注意：事件訂閱已移到 DelayedEventSubscription() 協程中
+    }
+    
+    private void OnDisable()
+    {
+        // 取消訂閱輸入事件，避免內存洩漏
+        UnsubscribeFromInputEvents();
+    }
+    
+    /// <summary>
+    /// 處理 Cancel 鍵輸入事件（事件驅動）
+    /// </summary>
+    private void HandleCancelInput()
+    {
+        Debug.Log($"[GameMenuManager] *** Cancel鍵事件被觸發 *** 當前選單狀態: {isOpen}");
+        
+        if (isOpen)
+        {
+            // 選單已開啟，ESC鍵用於關閉選單
+            Debug.Log("[GameMenuManager] 選單已開啟，ESC鍵關閉選單");
+            CloseGameMenu();
+        }
+        else
+        {
+            // 選單未開啟，檢查是否可以開啟選單
+            Debug.Log("[GameMenuManager] 選單未開啟，嘗試開啟選單");
+            HandleEscToOpenMenu();
+        }
     }
     
     protected override void Update()
     {
-        // 檢查ESC鍵輸入（只檢查一次）
-        bool escPressed = InputSystemWrapper.Instance != null && InputSystemWrapper.Instance.GetUICancelDown();
-        
-        if (escPressed)
-        {
-            Debug.Log($"[GameMenuManager] ESC鍵被按下，當前選單狀態: {isOpen}");
-        }
-        
-        // 根據當前狀態決定如何處理ESC鍵
-        if (escPressed)
-        {
-            if (isOpen)
-            {
-                // 選單已開啟，ESC鍵用於關閉選單
-                Debug.Log("[GameMenuManager] 選單已開啟，ESC鍵關閉選單");
-                CloseGameMenu();
-            }
-            else
-            {
-                // 選單未開啟，檢查是否可以開啟選單
-                HandleEscToOpenMenu();
-            }
-        }
-        
         // 處理選單內部的非ESC輸入（當選單開啟時）
         if (isOpen)
         {

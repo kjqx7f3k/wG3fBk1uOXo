@@ -216,8 +216,13 @@ public class InputSystemWrapper : MonoBehaviour
     
     private void OnUICancelPerformed(InputAction.CallbackContext context)
     {
-        if (!isUIInputEnabled) return;
+        if (!isUIInputEnabled) 
+        {
+            Debug.LogWarning("[InputSystemWrapper] Cancel事件觸發但UI輸入未啟用");
+            return;
+        }
         
+        Debug.Log("[InputSystemWrapper] *** Cancel事件觸發，準備調用 OnUICancel 事件 ***");
         OnUICancel?.Invoke();
         
         if (enableDebugLog)
@@ -226,8 +231,13 @@ public class InputSystemWrapper : MonoBehaviour
     
     private void OnUITabPerformed(InputAction.CallbackContext context)
     {
-        if (!isUIInputEnabled) return;
+        if (!isUIInputEnabled) 
+        {
+            Debug.LogWarning("[InputSystemWrapper] Tab事件觸發但UI輸入未啟用");
+            return;
+        }
         
+        Debug.Log("[InputSystemWrapper] *** Tab事件觸發，準備調用 OnUITab 事件 ***");
         OnUITab?.Invoke();
         
         if (enableDebugLog)

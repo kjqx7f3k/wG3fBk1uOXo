@@ -18,7 +18,6 @@ public class InventoryManager : UIPanel
     [SerializeField] private Button equipButton;
     
     [Header("3D 預覽系統")]
-    [SerializeField] private Item3DPreviewSystem previewSystem;
     [SerializeField] private RawImage previewDisplay;
     
     [Header("Prefab設定")]
@@ -146,11 +145,76 @@ public class InventoryManager : UIPanel
 
         // 直接開始延遲初始化
         StartCoroutine(DelayedInitialization());
+        
+        // 延遲訂閱事件，確保 InputSystemWrapper 已初始化
+        StartCoroutine(DelayedEventSubscription());
+    }
+    
+    /// <summary>
+    /// 延遲事件訂閱協程，確保 InputSystemWrapper 已初始化
+    /// </summary>
+    private System.Collections.IEnumerator DelayedEventSubscription()
+    {
+        // 等待 InputSystemWrapper 初始化
+        int waitCount = 0;
+        while (InputSystemWrapper.Instance == null && waitCount < 100) // 最多等待100幀
+        {
+            waitCount++;
+            yield return null;
+        }
+        
+        if (InputSystemWrapper.Instance != null)
+        {
+            // 安全訂閱事件
+            SubscribeToInputEvents();
+            Debug.Log("[InventoryManager] 延遲事件訂閱成功");
+        }
+        else
+        {
+            Debug.LogError("[InventoryManager] 無法獲取 InputSystemWrapper 實例，事件訂閱失敗！");
+        }
+    }
+    
+    /// <summary>
+    /// 訂閱輸入事件
+    /// </summary>
+    private void SubscribeToInputEvents()
+    {
+        if (InputSystemWrapper.Instance != null)
+        {
+            InputSystemWrapper.Instance.OnUITab += HandleTabInput;
+            InputSystemWrapper.Instance.OnUICancel += HandleCancelInput;
+            Debug.Log("[InventoryManager] 已訂閱輸入事件 - Tab和Cancel");
+        }
+        else
+        {
+            Debug.LogError("[InventoryManager] InputSystemWrapper.Instance 為 null，無法訂閱事件");
+        }
+    }
+    
+    /// <summary>
+    /// 取消訂閱輸入事件
+    /// </summary>
+    private void UnsubscribeFromInputEvents()
+    {
+        if (InputSystemWrapper.Instance != null)
+        {
+            InputSystemWrapper.Instance.OnUITab -= HandleTabInput;
+            InputSystemWrapper.Instance.OnUICancel -= HandleCancelInput;
+            Debug.Log("[InventoryManager] 已取消訂閱輸入事件");
+        }
     }
     
     private void OnEnable()
     {
         // 當GameObject變為active時，檢查是否需要執行延遲初始化
+        // 注意：事件訂閱已移到 DelayedEventSubscription() 協程中
+    }
+    
+    private void OnDisable()
+    {
+        // 取消訂閱輸入事件，避免內存洩漏
+        UnsubscribeFromInputEvents();
     }
     
     /// <summary>
@@ -171,42 +235,50 @@ public class InventoryManager : UIPanel
         AddTestItemsToCurrentCreature();
     }
     
-    protected override void Update()
+    /// <summary>
+    /// 處理 Tab 鍵輸入事件（事件驅動）
+    /// </summary>
+    private void HandleTabInput()
     {
-        // 檢查Tab鍵輸入（只檢查一次）
-        bool tabPressed = InputSystemWrapper.Instance != null && InputSystemWrapper.Instance.GetUITabDown();
+        Debug.Log($"[InventoryManager] *** Tab鍵事件被觸發 *** 當前道具欄狀態: {isOpen}");
         
-        if (tabPressed)
-        {
-            Debug.Log($"[InventoryManager] Tab鍵被按下，當前道具欄狀態: {isOpen}");
-        }
-        
-        // 根據當前狀態決定如何處理Tab鍵
-        if (tabPressed)
-        {
-            if (isOpen)
-            {
-                // 道具欄已開啟，Tab鍵用於關閉道具欄
-                Debug.Log("[InventoryManager] 道具欄已開啟，Tab鍵關閉道具欄");
-                CloseInventory();
-            }
-            else
-            {
-                // 道具欄未開啟，檢查是否可以開啟道具欄
-                HandleTabToOpenInventory();
-            }
-        }
-        
-        // 處理道具欄內部的非Tab輸入（當道具欄開啟時）
         if (isOpen)
         {
-            // 檢查ESC鍵 (假設 InputSystemWrapper.Instance.GetUIBackDown() 對應 ESC)
-            if (canCloseWithEscape && InputSystemWrapper.Instance != null && InputSystemWrapper.Instance.GetUICancelDown())
-            {
-                HandleEscapeKey();
-                return; // 處理完ESC後，直接返回，避免同一幀內處理其他輸入
-            }
-
+            // 道具欄已開啟，Tab鍵用於關閉道具欄
+            Debug.Log("[InventoryManager] 道具欄已開啟，Tab鍵關閉道具欄");
+            CloseInventory();
+        }
+        else
+        {
+            // 道具欄未開啟，檢查是否可以開啟道具欄
+            Debug.Log("[InventoryManager] 道具欄未開啟，嘗試開啟道具欄");
+            HandleTabToOpenInventory();
+        }
+    }
+    
+    /// <summary>
+    /// 處理 Cancel 鍵輸入事件（事件驅動）
+    /// </summary>
+    private void HandleCancelInput()
+    {
+        Debug.Log($"[InventoryManager] *** Cancel鍵事件被觸發 *** 當前道具欄狀態: {isOpen}, canCloseWithEscape: {canCloseWithEscape}");
+        
+        if (isOpen && canCloseWithEscape)
+        {
+            Debug.Log("[InventoryManager] 執行 ESC 關閉邏輯");
+            HandleEscapeKey();
+        }
+        else
+        {
+            Debug.Log($"[InventoryManager] Cancel 事件被忽略 - isOpen: {isOpen}, canCloseWithEscape: {canCloseWithEscape}");
+        }
+    }
+    
+    protected override void Update()
+    {
+        // 處理道具欄內部的非Tab/ESC輸入（當道具欄開啟時）
+        if (isOpen)
+        {
             HandleInventoryNavigation();
         }
     }
@@ -696,20 +768,14 @@ public class InventoryManager : UIPanel
     /// <returns>玩家物件</returns>
     private GameObject FindPlayerObject()
     {
-        // 嘗試從SceneCreatureManager獲取當前控制的creature
-        if (SceneCreatureManager.Instance != null && SceneCreatureManager.Instance.CurrentControlledCreature != null)
+        // 使用統一的生物管理系統
+        if (SceneCreatureManager.Instance?.CurrentControlledCreature != null)
         {
             return SceneCreatureManager.Instance.CurrentControlledCreature.GetTransform().gameObject;
         }
         
-        // 備用方案：尋找帶有Player標籤的物件
-        GameObject player = GameObject.FindGameObjectWithTag("Player");
-        if (player != null) return player;
-        
-        // 最後備用方案：尋找ControllableCreature組件
-        ControllableCreature creature = FindFirstObjectByType<ControllableCreature>();
-        if (creature != null) return creature.gameObject;
-        
+        // 如果獲取失敗，記錄警告並返回 null
+        Debug.LogWarning("[InventoryManager] 無法獲取當前控制的生物，請檢查 SceneCreatureManager 設定");
         return null;
     }
     
@@ -1238,21 +1304,21 @@ public class InventoryManager : UIPanel
         if (selectedItem == null) 
         {
             // 隱藏 3D 預覽
-            if (previewSystem != null)
+            if (ItemDatabase.Instance != null)
             {
-                previewSystem.HidePreview();
+                ItemDatabase.Instance.HidePreview();
             }
             return;
         }
         
-        // 使用 3D 預覽系統顯示選中道具
-        if (previewSystem != null)
+        // 使用 ItemDatabase 的 3D 預覽系統顯示選中道具
+        if (ItemDatabase.Instance != null)
         {
-            previewSystem.ShowItemPreview(selectedItem);
+            ItemDatabase.Instance.ShowItemPreview(selectedItem);
         }
         else
         {
-            Debug.LogWarning("[InventoryManager] Item3DPreviewSystem 未設置！請在Inspector中指定previewSystem引用。");
+            Debug.LogWarning("[InventoryManager] ItemDatabase 未初始化！請確保場景中有 ItemDatabase 實例。");
         }
     }
     

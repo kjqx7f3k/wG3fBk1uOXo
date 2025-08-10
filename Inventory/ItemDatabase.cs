@@ -1,9 +1,11 @@
 using UnityEngine;
+using UnityEngine.UI;
 using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>
 /// 物品數據庫管理器 - 負責在遊戲啟動時加載所有物品並提供快速查找
+/// 整合 3D 預覽系統，統一管理物品資料和 3D 模型預覽
 /// </summary>
 public class ItemDatabase : MonoBehaviour
 {
@@ -17,6 +19,7 @@ public class ItemDatabase : MonoBehaviour
     [SerializeField] private bool useManualItemList = false;
     [SerializeField] private List<Item> manualItemList = new List<Item>();
     
+    
     // 物品查找字典
     private Dictionary<int, Item> itemsById = new Dictionary<int, Item>();
     private Dictionary<string, Item> itemsByName = new Dictionary<string, Item>();
@@ -24,8 +27,19 @@ public class ItemDatabase : MonoBehaviour
     // 所有物品列表
     private List<Item> allItems = new List<Item>();
     
-    // 加載狀態
+    // 資料庫加載狀態
     private bool isLoaded = false;
+    
+    // === 3D 預覽系統變數 ===
+    // 全域模型池
+    private Dictionary<int, GameObject> globalModelPool = new Dictionary<int, GameObject>();
+    private GameObject currentActiveModel;
+    private Transform poolContainer;
+    
+    
+    // 旋轉控制
+    private bool isRotationEnabled = true;
+    private Vector3 currentRotationSpeed = Vector3.zero;
     
     public bool IsLoaded => isLoaded;
     public int ItemCount => allItems.Count;
@@ -47,6 +61,30 @@ public class ItemDatabase : MonoBehaviour
         else
         {
             Destroy(gameObject);
+        }
+    }
+    
+    private void Start()
+    {
+        // 如果在 Awake 中沒有載入物品，在這裡載入
+        if (!isLoaded && !loadOnAwake)
+        {
+            LoadAllItems();
+        }
+        
+        // 初始化 3D 預覽系統
+        Initialize3DPreviewSystem();
+        
+        // 載入 3D 模型
+        Load3DModelsForItems();
+    }
+    
+    private void Update()
+    {
+        // 處理自動旋轉
+        if (isRotationEnabled && currentActiveModel != null && currentRotationSpeed != Vector3.zero)
+        {
+            currentActiveModel.transform.Rotate(currentRotationSpeed * Time.deltaTime);
         }
     }
     
@@ -389,11 +427,213 @@ public class ItemDatabase : MonoBehaviour
     
     private void OnDestroy()
     {
+        // 清理 3D 預覽系統
+        Clear3DPreviewSystem();
+        
         if (Instance == this)
         {
             Instance = null;
         }
     }
+    
+    // ==================== 3D 預覽系統功能 ====================
+    
+    #region 3D Preview System
+    
+    /// <summary>
+    /// 初始化 3D 預覽系統（僅模型池）
+    /// </summary>
+    private void Initialize3DPreviewSystem()
+    {
+        // 創建全域模型容器
+        GameObject poolObject = new GameObject("GlobalItemModelPool");
+        poolContainer = poolObject.transform;
+        poolContainer.SetParent(transform);
+        // 保持容器活動，通過個別模型的 SetActive() 控制顯示
+        
+        Debug.Log("[ItemDatabase] 3D 預覽系統模型池初始化完成");
+    }
+    
+    /// <summary>
+    /// 載入所有物品的 3D 模型
+    /// </summary>
+    private void Load3DModelsForItems()
+    {
+        if (!isLoaded)
+        {
+            Debug.LogWarning("[ItemDatabase] 物品數據庫尚未載入，無法載入 3D 模型");
+            return;
+        }
+        
+        Debug.Log($"[ItemDatabase] 開始載入 {allItems.Count} 個道具的 3D 模型");
+        
+        int loadedCount = 0;
+        foreach (Item item in allItems)
+        {
+            if (item.ItemPrefab3D != null)
+            {
+                // 實例化模型
+                GameObject model = Instantiate(item.ItemPrefab3D, poolContainer);
+                model.name = $"Preview_{item.Name}_{item.Id}";
+                model.SetActive(false);
+                
+                // 應用預設的預覽設定
+                ApplyItemPreviewSettings(model, item);
+                
+                // 移除物理組件（預覽不需要物理）
+                RemovePhysicsComponents(model);
+                
+                // 加入全域池
+                globalModelPool[item.Id] = model;
+                loadedCount++;
+                
+                if (debugMode)
+                {
+                    Debug.Log($"[ItemDatabase] 載入 3D 模型: {item.Name} (ID: {item.Id})");
+                }
+            }
+        }
+        
+        Debug.Log($"[ItemDatabase] 3D 模型載入完成，共載入 {loadedCount} 個模型");
+    }
+    
+    /// <summary>
+    /// 應用道具的預覽設定
+    /// </summary>
+    private void ApplyItemPreviewSettings(GameObject model, Item item)
+    {
+        model.transform.localScale = item.PreviewScale;
+        model.transform.localRotation = Quaternion.Euler(item.PreviewRotation);
+        model.transform.localPosition = item.PreviewPosition;
+    }
+    
+    /// <summary>
+    /// 移除預覽模型上不需要的物理組件
+    /// </summary>
+    private void RemovePhysicsComponents(GameObject model)
+    {
+        // 禁用所有碰撞器
+        Collider[] colliders = model.GetComponentsInChildren<Collider>();
+        foreach (Collider col in colliders)
+        {
+            col.enabled = false;
+        }
+        
+        // 移除或設定剛體為 kinematic
+        Rigidbody[] rigidbodies = model.GetComponentsInChildren<Rigidbody>();
+        foreach (Rigidbody rb in rigidbodies)
+        {
+            rb.isKinematic = true;
+            rb.detectCollisions = false;
+        }
+    }
+    
+    /// <summary>
+    /// 顯示指定道具的 3D 預覽
+    /// </summary>
+    public void ShowItemPreview(Item item)
+    {
+        if (item == null)
+        {
+            HidePreview();
+            return;
+        }
+        
+        // 隱藏當前模型
+        HideCurrentModel();
+        
+        // 從全域池中獲取模型
+        if (globalModelPool.TryGetValue(item.Id, out GameObject model))
+        {
+            // 直接在相機前方固定位置顯示
+            model.SetActive(true);
+            currentActiveModel = model;
+            
+            // 設定旋轉
+            if (item.EnableAutoRotation)
+            {
+                currentRotationSpeed = item.RotationSpeed;
+                isRotationEnabled = true;
+            }
+            else
+            {
+                currentRotationSpeed = Vector3.zero;
+                isRotationEnabled = false;
+            }
+            
+            if (debugMode)
+            {
+                Debug.Log($"[ItemDatabase] 顯示 3D 預覽: {item.Name}");
+            }
+        }
+        else
+        {
+            if (debugMode)
+            {
+                Debug.LogWarning($"[ItemDatabase] 找不到道具 3D 模型: {item.Name} (ID: {item.Id})");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 隱藏當前的預覽
+    /// </summary>
+    public void HidePreview()
+    {
+        HideCurrentModel();
+        currentRotationSpeed = Vector3.zero;
+    }
+    
+    /// <summary>
+    /// 隱藏當前激活的模型
+    /// </summary>
+    private void HideCurrentModel()
+    {
+        if (currentActiveModel != null)
+        {
+            currentActiveModel.SetActive(false);
+            // 模型保持在原本的池容器中，不需要移動
+            currentActiveModel = null;
+        }
+    }
+    
+    /// <summary>
+    /// 設定旋轉啟用狀態
+    /// </summary>
+    public void SetRotationEnabled(bool enabled)
+    {
+        isRotationEnabled = enabled;
+    }
+    
+    /// <summary>
+    /// 清理 3D 預覽系統
+    /// </summary>
+    private void Clear3DPreviewSystem()
+    {
+        HidePreview();
+        
+        foreach (var kvp in globalModelPool)
+        {
+            if (kvp.Value != null)
+            {
+                DestroyImmediate(kvp.Value);
+            }
+        }
+        
+        globalModelPool.Clear();
+        
+        Debug.Log("[ItemDatabase] 3D 預覽系統模型池已清理");
+    }
+    
+    /// <summary>
+    /// 獲取 3D 預覽系統狀態信息
+    /// </summary>
+    public string GetPreviewSystemInfo()
+    {
+        return $"載入 3D 模型數量: {globalModelPool.Count}, 當前預覽: {(currentActiveModel?.name ?? "無")}";
+    }
+    
+    #endregion
     
     /// <summary>
     /// 驗證數據庫完整性
