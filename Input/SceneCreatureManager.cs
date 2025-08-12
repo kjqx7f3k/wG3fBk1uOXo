@@ -11,9 +11,6 @@ public class SceneCreatureManager : MonoBehaviour
     
     [Header("場景特定設定")]
     [SerializeField] private Camera sceneCamera;
-    [SerializeField] private bool overrideCameraSettings = false;
-    [SerializeField] private Vector3 customCameraOffset = new Vector3(0, 2, -5);
-    [SerializeField] private float customCameraSpeed = 5f;
     
     /// <summary>
     /// 獲取當前正在控制的生物
@@ -59,34 +56,13 @@ public class SceneCreatureManager : MonoBehaviour
             // 自動註冊生物
             if (autoRegisterOnStart)
             {
-                RegisterCreaturesInSceneInputSystem();
+                RegisterCreaturesInScene();
             }
             
             // 監聽控制器事件
             inputSystemController.OnSceneChanged += OnSceneChanged;
             inputSystemController.OnCreatureSwitched += OnCreatureSwitched;
         }
-        // else
-        // {
-        //     // 回退到傳統控制器
-        //     var controller =PersistentPlayerControllerInputSystem.Instance;
-            
-        //     // 設定場景特定的攝影機
-        //     if (sceneCamera != null)
-        //     {
-        //         controller.SetCamera(sceneCamera);
-        //     }
-            
-        //     // 自動註冊生物
-        //     if (autoRegisterOnStart)
-        //     {
-        //         RegisterCreaturesInScene();
-        //     }
-            
-        //     // 監聽控制器事件
-        //     controller.OnSceneChanged += OnSceneChanged;
-        //     controller.OnCreatureSwitched += OnCreatureSwitched;
-        // }
     }
     
     private void OnDestroy()
@@ -101,7 +77,12 @@ public class SceneCreatureManager : MonoBehaviour
     
     private void RegisterCreaturesInScene()
     {
-        var controller =PersistentPlayerControllerInputSystem.Instance;
+        var controller = PersistentPlayerControllerInputSystem.Instance;
+        if (controller == null)
+        {
+            Debug.LogError("PersistentPlayerControllerInputSystem 實例不存在，無法註冊生物");
+            return;
+        }
         
         if (registerOnlyTaggedCreatures)
         {
@@ -122,40 +103,6 @@ public class SceneCreatureManager : MonoBehaviour
         else
         {
             // 註冊所有 ControllableCreature 組件
-            ControllableCreature[] ccs = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
-            
-            foreach (ControllableCreature cc in ccs)
-            {
-                controller.RegisterControllableCreature(cc);
-            }
-            
-            Debug.Log($"註冊了 {ccs.Length} 個 ControllableCreature 組件");
-        }
-    }
-    
-    private void RegisterCreaturesInSceneInputSystem()
-    {
-        var controller = PersistentPlayerControllerInputSystem.Instance;
-        
-        if (registerOnlyTaggedCreatures)
-        {
-            // 只註冊有特定標籤的生物
-            GameObject[] taggedObjects = GameObject.FindGameObjectsWithTag(creatureTag);
-            
-            foreach (GameObject obj in taggedObjects)
-            {
-                IControllable controllable = obj.GetComponent<IControllable>();
-                if (controllable != null)
-                {
-                    controller.RegisterControllableCreature(controllable);
-                }
-            }
-            
-            Debug.Log($"[Input System] 註冊了 {taggedObjects.Length} 個標籤為 '{creatureTag}' 的可控制物件");
-        }
-        else
-        {
-            // 註冊所有 ControllableCreature 組件
             ControllableCreature[] creatures = FindObjectsByType<ControllableCreature>(FindObjectsSortMode.None);
             
             foreach (ControllableCreature creature in creatures)
@@ -163,7 +110,7 @@ public class SceneCreatureManager : MonoBehaviour
                 controller.RegisterControllableCreature(creature);
             }
             
-            Debug.Log($"[Input System] 註冊了 {creatures.Length} 個 ControllableCreature 組件");
+            Debug.Log($"註冊了 {creatures.Length} 個 ControllableCreature 組件");
         }
     }
     
@@ -192,13 +139,29 @@ public class SceneCreatureManager : MonoBehaviour
     // 手動註冊特定生物
     public void RegisterCreature(IControllable creature)
     {
-       PersistentPlayerControllerInputSystem.Instance.RegisterControllableCreature(creature);
+        var controller = PersistentPlayerControllerInputSystem.Instance;
+        if (controller != null && creature != null)
+        {
+            controller.RegisterControllableCreature(creature);
+        }
+        else
+        {
+            Debug.LogError("無法註冊生物：控制器或生物為 null");
+        }
     }
     
     // 手動取消註冊特定生物
     public void UnregisterCreature(IControllable creature)
     {
-       PersistentPlayerControllerInputSystem.Instance.UnregisterControllableCreature(creature);
+        var controller = PersistentPlayerControllerInputSystem.Instance;
+        if (controller != null && creature != null)
+        {
+            controller.UnregisterControllableCreature(creature);
+        }
+        else
+        {
+            Debug.LogError("無法取消註冊生物：控制器或生物為 null");
+        }
     }
     
     // 重新註冊所有生物（用於動態生成生物後）
@@ -210,17 +173,14 @@ public class SceneCreatureManager : MonoBehaviour
     // 清除當前場景的所有生物註冊
     public void ClearSceneCreatures()
     {
-       PersistentPlayerControllerInputSystem.Instance.ClearAllCreatures();
-    }
-    
-    // 設定場景特定的攝影機設定
-    public void ApplyCustomCameraSettings()
-    {
-        if (overrideCameraSettings)
+        var controller = PersistentPlayerControllerInputSystem.Instance;
+        if (controller != null)
         {
-            // 這裡需要通過反射或其他方式設定 PersistentPlayerController 的攝影機參數
-            // 或者可以擴展 PersistentPlayerController 來支援這些設定
-            Debug.Log("應用自定義攝影機設定");
+            controller.ClearAllCreatures();
+        }
+        else
+        {
+            Debug.LogError("無法清除場景生物：PersistentPlayerControllerInputSystem 實例不存在");
         }
     }
 }
