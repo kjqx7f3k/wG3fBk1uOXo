@@ -794,7 +794,9 @@ public class SaveManager : MonoBehaviour
             // 如果是可控制生物，保存額外數據
             if (creature is ControllableCreature controllable)
             {
-                creatureData.isPlayerControlled = controllable.GetComponent<PersistentPlayerControllerInputSystem>() != null;
+                // 檢查是否為當前正在被玩家控制的生物
+                creatureData.isPlayerControlled = CreatureController.Instance != null && 
+                                                 CreatureController.Instance.CurrentControlledCreature == controllable;
             }
             
             creaturesData.Add(creatureData);

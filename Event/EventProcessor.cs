@@ -372,16 +372,13 @@ public static class EventProcessor
             }
         }
         
-        if (GameSceneManager.Instance != null)
+        // 直接使用Unity內建場景載入（GameSceneManager已移除）
+        if (showLoading && LoadingScreenManager.Instance != null)
         {
-            GameSceneManager.Instance.LoadScene(sceneName, showLoading);
-            Debug.Log($"載入場景: {sceneName} (顯示載入畫面: {showLoading})");
+            LoadingScreenManager.Instance.OnSceneLoadStarted(sceneName);
         }
-        else
-        {
-            Debug.LogWarning("GameSceneManager.Instance 為 null，使用Unity內建場景載入");
-            UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
-            Debug.Log($"載入場景: {sceneName} (使用Unity內建載入)");
-        }
+        
+        UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
+        Debug.Log($"載入場景: {sceneName} (顯示載入畫面: {showLoading})");
     }
 }

@@ -547,10 +547,10 @@ public class InventoryManager : UIPanel
     /// </summary>
     private void InitializeWithCurrentCreature()
     {
-        // 從SceneCreatureManager獲取當前控制的生物
-        if (SceneCreatureManager.Instance != null)
+        // 從CreatureController獲取當前控制的生物
+        if (CreatureController.Instance != null)
         {
-            IControllable controllable = SceneCreatureManager.Instance.CurrentControlledCreature;
+            IControllable controllable = CreatureController.Instance.CurrentControlledCreature;
             if (controllable is ControllableCreature creature)  SetCurrentCreature(creature);
         }
     }
@@ -769,13 +769,13 @@ public class InventoryManager : UIPanel
     private GameObject FindPlayerObject()
     {
         // 使用統一的生物管理系統
-        if (SceneCreatureManager.Instance?.CurrentControlledCreature != null)
+        if (CreatureController.Instance?.CurrentControlledCreature != null)
         {
-            return SceneCreatureManager.Instance.CurrentControlledCreature.GetTransform().gameObject;
+            return CreatureController.Instance.CurrentControlledCreature.GetTransform().gameObject;
         }
         
         // 如果獲取失敗，記錄警告並返回 null
-        Debug.LogWarning("[InventoryManager] 無法獲取當前控制的生物，請檢查 SceneCreatureManager 設定");
+        Debug.LogWarning("[InventoryManager] 無法獲取當前控制的生物，請檢查 CreatureController 設定");
         return null;
     }
     

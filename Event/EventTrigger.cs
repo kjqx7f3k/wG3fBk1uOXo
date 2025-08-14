@@ -134,16 +134,16 @@ public class EventTrigger : MonoBehaviour
         if (playerTransform == null && !hasSearchedForPlayer)
         {
             // 使用統一的生物管理系統獲取當前控制的生物
-            if (SceneCreatureManager.Instance?.CurrentControlledCreature != null)
+            if (CreatureController.Instance?.CurrentControlledCreature != null)
             {
-                playerTransform = SceneCreatureManager.Instance.CurrentControlledCreature.GetTransform();
+                playerTransform = CreatureController.Instance.CurrentControlledCreature.GetTransform();
                 if (debugMode)
-                    Debug.Log($"[EventTrigger] {name}: 從 SceneCreatureManager 獲取到玩家引用");
+                    Debug.Log($"[EventTrigger] {name}: 從CreatureController獲取到玩家引用");
             }
             else
             {
                 if (debugMode)
-                    Debug.LogWarning($"[EventTrigger] {name}: 無法從 SceneCreatureManager 獲取當前控制的生物");
+                    Debug.LogWarning($"[EventTrigger] {name}: 無法從CreatureController獲取當前控制的生物");
             }
             hasSearchedForPlayer = true;
         }
@@ -273,15 +273,7 @@ public class EventTrigger : MonoBehaviour
             Debug.Log($"[EventTrigger] {name} NarrationDialogManager.Instance 可用");
         }
         
-        // 檢查 GameSceneManager
-        if (GameSceneManager.Instance == null)
-        {
-            Debug.LogWarning($"[EventTrigger] {name} GameSceneManager.Instance 為 null");
-        }
-        else
-        {
-            Debug.Log($"[EventTrigger] {name} GameSceneManager.Instance 可用");
-        }
+        // GameSceneManager 已移除，不再檢查
     }
     
     /// <summary>

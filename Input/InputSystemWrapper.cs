@@ -16,6 +16,7 @@ public class InputSystemWrapper : MonoBehaviour
     // Input Actions
     private InputSystem_Actions inputActions;
     private InputSystem_Actions.UIActions uiActions;
+    private InputSystem_Actions.PlayerActions playerActions;  // 新增：遊戲輸入
     
     // UI 輸入事件
     public event Action<Vector2> OnUINavigate;
@@ -25,8 +26,18 @@ public class InputSystemWrapper : MonoBehaviour
     public event Action<Vector2> OnUIScroll;
     public event Action OnMenuToggle;
     
+    // 遊戲輸入事件
+    public event Action<Vector2> OnPlayerMove;
+    public event Action OnPlayerJump;
+    public event Action OnPlayerAttack;
+    public event Action OnPlayerInteract;
+    public event Action OnPlayerSwitchCreature;
+    public event Action OnPlayerShowInfo;
+    public event Action<int> OnPlayerNumberKey;
+    
     // 輸入狀態
     private bool isUIInputEnabled = false;  // 修復：初始化為false，等待正確啟用
+    private bool isPlayerInputEnabled = false;  // 新增：遊戲輸入狀態
     private bool isNavigating = false;
     
     private void Awake()
@@ -50,6 +61,7 @@ public class InputSystemWrapper : MonoBehaviour
             // 創建 Input Actions 實例
             inputActions = new InputSystem_Actions();
             uiActions = inputActions.UI;
+            playerActions = inputActions.Player;  // 新增：遊戲輸入
             
             // 訂閱所有 UI 輸入事件
             uiActions.UINavigate.performed += OnUINavigatePerformed;
@@ -59,11 +71,22 @@ public class InputSystemWrapper : MonoBehaviour
             uiActions.UITab.performed += OnUITabPerformed;
             uiActions.UIScroll.performed += OnUIScrollPerformed;
             
+            // 新增：訂閱遊戲輸入事件
+            playerActions.Move.performed += OnPlayerMovePerformed;
+            playerActions.Move.canceled += OnPlayerMoveCanceled;
+            playerActions.Jump.performed += OnPlayerJumpPerformed;
+            playerActions.Attack.performed += OnPlayerAttackPerformed;
+            playerActions.Interact.performed += OnPlayerInteractPerformed;
+            playerActions.SwitchCreature.performed += OnPlayerSwitchCreaturePerformed;
+            playerActions.ShowInfo.performed += OnPlayerShowInfoPerformed;
+            playerActions.NumberKey.performed += OnPlayerNumberKeyPerformed;
+            
             if (enableDebugLog)
-                Debug.Log("[InputSystemWrapper] 輸入系統初始化完成（所有 UI Actions 已配置）");
+                Debug.Log("[InputSystemWrapper] 輸入系統初始化完成（UI 和遊戲 Actions 已配置）");
                 
             // 確保輸入立即啟用
             EnableUIInput();
+            EnablePlayerInput();  // 新增：啟用遊戲輸入
         }
         catch (System.Exception e)
         {
@@ -328,5 +351,174 @@ public class InputSystemWrapper : MonoBehaviour
     public void SetDebugLog(bool enabled)
     {
         enableDebugLog = enabled;
+    }
+    
+    // ==================== 遊戲輸入管理 ====================
+    
+    /// <summary>
+    /// 啟用遊戲輸入
+    /// </summary>
+    public void EnablePlayerInput()
+    {
+        if (inputActions != null)
+        {
+            if (!isPlayerInputEnabled)
+            {
+                playerActions.Enable();
+                isPlayerInputEnabled = true;
+                
+                if (enableDebugLog)
+                    Debug.Log("[InputSystemWrapper] 遊戲輸入已啟用");
+            }
+        }
+        else
+        {
+            Debug.LogError("[InputSystemWrapper] inputActions 為 null，無法啟用遊戲輸入");
+        }
+    }
+    
+    /// <summary>
+    /// 停用遊戲輸入
+    /// </summary>
+    public void DisablePlayerInput()
+    {
+        if (inputActions != null)
+        {
+            if (isPlayerInputEnabled)
+            {
+                playerActions.Disable();
+                isPlayerInputEnabled = false;
+                
+                if (enableDebugLog)
+                    Debug.Log("[InputSystemWrapper] 遊戲輸入已停用");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 檢查遊戲輸入是否啟用
+    /// </summary>
+    public bool IsPlayerInputEnabled()
+    {
+        return isPlayerInputEnabled && inputActions != null;
+    }
+    
+    // ==================== 遊戲輸入回調函數 ====================
+    
+    private void OnPlayerMovePerformed(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        Vector2 movement = context.ReadValue<Vector2>();
+        OnPlayerMove?.Invoke(movement);
+        
+        if (enableDebugLog && movement != Vector2.zero)
+            Debug.Log($"[InputSystemWrapper] 玩家移動: {movement}");
+    }
+    
+    private void OnPlayerMoveCanceled(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        OnPlayerMove?.Invoke(Vector2.zero);
+    }
+    
+    private void OnPlayerJumpPerformed(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        OnPlayerJump?.Invoke();
+        
+        if (enableDebugLog)
+            Debug.Log("[InputSystemWrapper] 玩家跳躍");
+    }
+    
+    private void OnPlayerAttackPerformed(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        OnPlayerAttack?.Invoke();
+        
+        if (enableDebugLog)
+            Debug.Log("[InputSystemWrapper] 玩家攻擊");
+    }
+    
+    private void OnPlayerInteractPerformed(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        OnPlayerInteract?.Invoke();
+        
+        if (enableDebugLog)
+            Debug.Log("[InputSystemWrapper] 玩家交互");
+    }
+    
+    private void OnPlayerSwitchCreaturePerformed(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        OnPlayerSwitchCreature?.Invoke();
+        
+        if (enableDebugLog)
+            Debug.Log("[InputSystemWrapper] 切換生物");
+    }
+    
+    private void OnPlayerShowInfoPerformed(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        OnPlayerShowInfo?.Invoke();
+        
+        if (enableDebugLog)
+            Debug.Log("[InputSystemWrapper] 顯示資訊");
+    }
+    
+    private void OnPlayerNumberKeyPerformed(InputAction.CallbackContext context)
+    {
+        if (!isPlayerInputEnabled) return;
+        
+        int numKeyValue;
+        if (int.TryParse(context.control.name, out numKeyValue))
+        {
+            OnPlayerNumberKey?.Invoke(numKeyValue);
+            
+            if (enableDebugLog)
+                Debug.Log($"[InputSystemWrapper] 數字鍵: {numKeyValue}");
+        }
+    }
+    
+    // ==================== 事件連接方法 ====================
+    
+    /// <summary>
+    /// 連接到 CreatureController
+    /// </summary>
+    public void ConnectToCreatureController()
+    {
+        var creatureController = CreatureController.Instance;
+        if (creatureController != null)
+        {
+            OnPlayerMove += creatureController.HandleMovementInput;
+            OnPlayerJump += creatureController.HandleJumpInput;
+            OnPlayerAttack += creatureController.HandleAttackInput;
+            OnPlayerInteract += creatureController.HandleInteractInput;
+            OnPlayerNumberKey += creatureController.HandleNumberKeyInput;
+            OnPlayerSwitchCreature += creatureController.HandleSwitchCreatureInput;
+            OnPlayerShowInfo += creatureController.HandleShowInfoInput;
+            
+            Debug.Log("[InputSystemWrapper] 已連接到 CreatureController");
+        }
+        else
+        {
+            Debug.LogError("[InputSystemWrapper] 無法連接到 CreatureController - 實例不存在");
+        }
+    }
+    
+    /// <summary>
+    /// 初始化所有輸入連接
+    /// </summary>
+    [ContextMenu("初始化輸入連接")]
+    public void InitializeInputConnections()
+    {
+        ConnectToCreatureController();
     }
 }

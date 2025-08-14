@@ -18,10 +18,6 @@ public class InScenePortal : MonoBehaviour
     [Header("相機設定")]
     [SerializeField] private Camera targetCamera; // 傳送後要切換的相機
     
-    [Header("玩家檢測")]
-    [SerializeField] private LayerMask playerLayerMask = 1;
-    [SerializeField] private string playerTag = "Player";
-    
     [Header("除錯設定")]
     [SerializeField] private bool debugMode = false;
     [SerializeField] private bool showGizmos = true;
@@ -65,10 +61,10 @@ public class InScenePortal : MonoBehaviour
     /// </summary>
     private void OnTriggerEnter(Collider other)
     {
-        if (!IsValidPlayer(other.gameObject)) return;
+        if (!IsCurrentlyControlledCreature(other.gameObject)) return;
 
         if (debugMode)
-            Debug.Log($"{portalName}: 玩家 {other.gameObject.name} 進入，開始傳送");
+            Debug.Log($"{portalName}: 當前控制生物 {other.gameObject.name} 進入，開始傳送");
 
         TeleportPlayer(other.gameObject);
     }
@@ -166,24 +162,30 @@ public class InScenePortal : MonoBehaviour
     }
 
     /// <summary>
-    /// 檢查是否為有效玩家
+    /// 檢查是否為當前控制的生物
     /// </summary>
-    private bool IsValidPlayer(GameObject obj)
+    private bool IsCurrentlyControlledCreature(GameObject obj)
     {
         if (obj == null) return false;
 
-        // 檢查標籤
-        bool hasCorrectTag = obj.CompareTag(playerTag);
-
-        // 檢查Layer（如果playerLayerMask不為0）
-        bool hasCorrectLayer = playerLayerMask == 0 || ((1 << obj.layer) & playerLayerMask) != 0;
-
-        if (debugMode && hasCorrectTag)
+        var controller = CreatureController.Instance;
+        if (controller?.CurrentControlledCreature == null)
         {
-            Debug.Log($"{portalName}: 檢測到玩家 {obj.name}, Tag: {hasCorrectTag}, Layer: {hasCorrectLayer}");
+            if (debugMode)
+                Debug.Log($"{portalName}: 沒有當前控制的生物");
+            return false;
         }
 
-        return hasCorrectTag && hasCorrectLayer;
+        // 檢查這個GameObject是否屬於當前控制的生物
+        var controllable = obj.GetComponent<IControllable>();
+        bool isControlled = controllable != null && controllable == controller.CurrentControlledCreature;
+
+        if (debugMode && controllable != null)
+        {
+            Debug.Log($"{portalName}: 檢測到生物 {obj.name}, 是否為當前控制: {isControlled}");
+        }
+
+        return isControlled;
     }
 
     /// <summary>
