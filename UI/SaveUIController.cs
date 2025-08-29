@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Collections;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
+using UnityEngine.Localization;
 
 public class SaveUIController : UIPanel
 {
@@ -26,18 +27,15 @@ public class SaveUIController : UIPanel
         [SerializeField] private Button _backButton;
         [SerializeField] private TextMeshProUGUI _backButtonText;
 
+        [Header("本地化組件")]
+        [SerializeField] private TextMeshProUGUI _noSaveFilesLabel;
+
         [Header("Pagination")]
         [SerializeField] private int _itemsPerPage = 5;
         [SerializeField] private TextMeshProUGUI _pageInfoText;
 
         [Header("Settings")]
-        [SerializeField] private string _uiTitle = "";
         [SerializeField] private string[] _saveFileExtensions = { ".eqg", ".sav" };
-        [SerializeField] private string _selectedPrefix = "> ";
-        [SerializeField] private string _deleteButtonNormalText = "刪除";
-        [SerializeField] private string _deleteButtonConfirmText = "確認?";
-        [SerializeField] private string _backButtonOriginalText = "返回";
-        [SerializeField] private string _loadButtonOriginalText = "載入";
 
         public UnityEvent OnCloseUI = new UnityEvent();
 
@@ -87,7 +85,6 @@ public class SaveUIController : UIPanel
             }
             isOpen = false;
             
-            _uiTitleText.text = _uiTitle;
             _loadButton.onClick.AddListener(OnLoadButtonClicked);
             _deleteButton.onClick.AddListener(OnDeleteButtonClicked);
             
@@ -98,6 +95,9 @@ public class SaveUIController : UIPanel
             _actionButtonsPanel.SetActive(true);
             _loadButton.interactable = false;
             _deleteButton.interactable = false;
+            
+            // 延遲初始化以確保組件順序正確
+            StartCoroutine(DelayedInitialization());
         }
 
         /// <summary>
@@ -130,7 +130,6 @@ public class SaveUIController : UIPanel
         protected override void OnOpened()
         {
             RefreshSaveList();
-            Debug.Log("存檔UI已開啟");
 
             // 確保在下一幀設置預設選中
             StartCoroutine(SetDefaultSelectionNextFrame());
@@ -144,7 +143,6 @@ public class SaveUIController : UIPanel
             OnCloseUI?.Invoke();
             // 每次關閉 UI 後，從事件中移除監聽器，避免重複呼叫
             OnCloseUI.RemoveAllListeners();
-            Debug.Log("存檔UI已關閉");
         }
         
         /// <summary>
@@ -177,10 +175,7 @@ public class SaveUIController : UIPanel
             // 確保當前頁數在有效範圍內
             _currentPage = Mathf.Clamp(_currentPage, 0, _totalPages - 1);
 
-            // 顯示當前頁的內容
             DisplayCurrentPage();
-            
-            // 刷新後，重置為未選擇任何存檔的初始狀態
             DeselectSaveFile();
         }
         
@@ -199,8 +194,7 @@ public class SaveUIController : UIPanel
             // 重建導航列表以包含 "載入", "刪除", "返回"
             BuildNavigableButtons(true);
 
-            // 預設選擇 "載入" 按鈕
-            _currentNavIndex = _navigableButtons.IndexOf(_loadButton);
+_currentNavIndex = _navigableButtons.IndexOf(_loadButton);
             UpdateSelectionVisuals();
         }
 
@@ -216,8 +210,7 @@ public class SaveUIController : UIPanel
             _loadButton.interactable = false;
             _deleteButton.interactable = false;
 
-            // 重建導航列表，只包含存檔項目和返回按鈕
-            BuildNavigableButtons(false);
+BuildNavigableButtons(false);
             SetDefaultSelection();
         }
 
@@ -228,12 +221,9 @@ public class SaveUIController : UIPanel
             // 使用真正的SaveManager載入遊戲
             if (SaveManager.Instance != null)
             {
-                Debug.Log($"[SaveUI] 嘗試載入存檔: {_selectedFileName}");
-                
                 bool loadSuccess = SaveManager.Instance.LoadGameWithCustomFileName(_selectedFileName);
                 if (loadSuccess)
                 {
-                    Debug.Log($"[SaveUI] 存檔載入開始: {_selectedFileName}");
                     CloseSaveUI();
                 }
                 else
@@ -255,23 +245,22 @@ public class SaveUIController : UIPanel
             {
                 string filePath = Path.Combine(Application.persistentDataPath, _selectedFileName + GetExtensionForFile(_selectedFileName));
                 
-                // 直接使用File.Delete而不是假的SaveManager
+                // 直接使用File.Delete
                 if (File.Exists(filePath))
                 {
                     File.Delete(filePath);
-                    Debug.Log($"[SaveUI] 已刪除存檔文件: {filePath}");
                 }
                 else
                 {
                     Debug.LogWarning($"[SaveUI] 嘗試刪除不存在的文件: {filePath}");
                 }
                 
-                RefreshSaveList(); // 刪除後刷新整個列表並重置狀態
+RefreshSaveList();
             }
             else
             {
                 _isDeleteConfirming = true;
-                UpdateSelectionVisuals(); // 更新視覺，讓刪除按鈕顯示確認文字
+                UpdateSelectionVisuals();
             }
         }
 
@@ -280,9 +269,7 @@ public class SaveUIController : UIPanel
         /// </summary>
         private void OnBackButtonClicked()
         {
-            GameMenuManager.Instance.OpenGameMenu(); // 呼叫遊戲選單管理器的開啟方法
-            
-            // 返回按鈕的功能就是關閉UI，回到GameMenu
+            GameMenuManager.Instance.OpenGameMenu();
             CloseSaveUI();
         }
 
@@ -315,10 +302,9 @@ public class SaveUIController : UIPanel
             
             if (hasNavigationInput)
             {
-                // 只有當前時間超過了 (上次導航時間 + 冷卻時間) 才執行導航
                 if (Time.unscaledTime > lastNavigationTime + navigationCooldown)
                 {
-                    lastNavigationTime = Time.unscaledTime; // 更新上次導航時間
+                    lastNavigationTime = Time.unscaledTime;
                     
                     if (navigation.y > 0.5f)
                     {
@@ -337,7 +323,7 @@ public class SaveUIController : UIPanel
                         SwitchToActionButtonsNavigation();
                     }
                 }
-                // 如果在冷卻時間內，忽略導航輸入（不輸出調試訊息以避免日誌洪水）
+                // 如果在冷卻時間內，忽略導航輸入
             }
             
             // 確認和取消輸入不受冷卻時間影響
@@ -369,12 +355,11 @@ public class SaveUIController : UIPanel
             }
             else
             {
-                // 狀態1: 預設狀態，可導航按鈕只包含存檔項目（不包含返回按鈕）
+                // 狀態1: 預設狀態，可導航按鈕只包含存檔項目
                 foreach (var button in _buttonTextMapping.Keys)
                 {
                     _navigableButtons.Add(button);
                 }
-                // 不添加返回按鈕到導航列表中
             }
         }
         
@@ -385,12 +370,11 @@ public class SaveUIController : UIPanel
         {
             if (_navigableButtons.Count > 0)
             {
-                // 如果有存檔文件，預設選中第一個；否則，唯一的選項就是返回按鈕
                 _currentNavIndex = _buttonTextMapping.Count > 0 ? 0 : 0;
             }
             else
             {
-                _currentNavIndex = -1; // 沒有任何可選項目
+                _currentNavIndex = -1;
             }
             UpdateSelectionVisuals();
         }
@@ -401,14 +385,12 @@ public class SaveUIController : UIPanel
         /// <param name="direction">-1 為上, 1 為下</param>
         private void Navigate(int direction)
         {
-            // 如果已選擇存檔，使用操作按鈕的導航邏輯
             if (!string.IsNullOrEmpty(_selectedFileName))
             {
                 if (_navigableButtons.Count <= 1) return;
 
                 _currentNavIndex += direction;
 
-                // 循環導航
                 if (_currentNavIndex < 0) { _currentNavIndex = _navigableButtons.Count - 1; }
                 if (_currentNavIndex >= _navigableButtons.Count) { _currentNavIndex = 0; }
 
@@ -417,12 +399,12 @@ public class SaveUIController : UIPanel
             }
 
             // 存檔列表導航邏輯（支持自動換頁）
-            if (_navigableButtons.Count == 0) return; // 如果沒有任何可導航的按鈕，直接返回
+            if (_navigableButtons.Count == 0) return;
 
             // 如果總頁數只有一頁，則在頁內循環
             if (_totalPages <= 1)
             {
-                if (_navigableButtons.Count <= 1) return; // 如果只有一個項目且只有一頁，不導航
+                if (_navigableButtons.Count <= 1) return;
                 
                 _currentNavIndex += direction;
                 if (_currentNavIndex < 0) { _currentNavIndex = _navigableButtons.Count - 1; }
@@ -432,24 +414,24 @@ public class SaveUIController : UIPanel
                 return;
             }
 
-            // --- 多頁情況下的換頁邏輯 ---
+            // 多頁情況下的換頁邏輯
             int newIndex = _currentNavIndex + direction;
             
-            if (newIndex < 0) // 向上超出當前頁範圍
+            if (newIndex < 0)
             {
                 _currentPage = (_currentPage - 1 + _totalPages) % _totalPages;
                 DisplayCurrentPage();
                 BuildNavigableButtons(false);
-                _currentNavIndex = _buttonTextMapping.Count - 1; // 選中上一頁的最後一個存檔項目
+                _currentNavIndex = _buttonTextMapping.Count - 1;
             }
-            else if (newIndex >= _navigableButtons.Count) // 向下超出當前頁範圍
+            else if (newIndex >= _navigableButtons.Count)
             {
                 _currentPage = (_currentPage + 1) % _totalPages;
                 DisplayCurrentPage();
                 BuildNavigableButtons(false);
-                _currentNavIndex = 0; // 選中下一頁的第一個存檔項目
+                _currentNavIndex = 0;
             }
-            else // 正常在頁內導航
+            else
             {
                 _currentNavIndex = newIndex;
             }
@@ -476,18 +458,13 @@ public class SaveUIController : UIPanel
         /// </summary>
         private void SwitchToSaveListNavigation()
         {
-            // 如果已經在存檔列表導航模式，或者沒有存檔文件，則不執行
             if (string.IsNullOrEmpty(_selectedFileName) || _buttonTextMapping.Count == 0) return;
-
-            Debug.Log("[Navigation] 切換到存檔列表導航模式");
             
             // 記住當前選中的存檔文件名
             string rememberedFileName = _selectedFileName;
             
-            // 取消存檔選擇，回到存檔列表導航
             DeselectSaveFile();
             
-            // 嘗試導航到之前選中的存檔項目
             NavigateToSaveFile(rememberedFileName);
         }
 
@@ -496,19 +473,15 @@ public class SaveUIController : UIPanel
         /// </summary>
         private void SwitchToActionButtonsNavigation()
         {
-            // 如果已經在操作按鈕導航模式，或者沒有存檔文件，則不執行
             if (!string.IsNullOrEmpty(_selectedFileName) || _buttonTextMapping.Count == 0) return;
-
-            Debug.Log("[Navigation] 切換到操作按鈕導航模式");
             
-            // 選擇當前選中的存檔項目
             if (_currentNavIndex >= 0 && _currentNavIndex < _navigableButtons.Count)
             {
                 Button selectedButton = _navigableButtons[_currentNavIndex];
                 if (_buttonTextMapping.ContainsKey(selectedButton))
                 {
-                    // 獲取選中的存檔文件名
-                    string fileName = _buttonTextMapping[selectedButton].text.TrimStart(_selectedPrefix.ToCharArray());
+                    string selectedPrefix = GetLocalizedPrefix();
+                    string fileName = _buttonTextMapping[selectedButton].text.TrimStart(selectedPrefix.ToCharArray());
                     SelectSaveFile(fileName, selectedButton);
                 }
             }
@@ -519,25 +492,27 @@ public class SaveUIController : UIPanel
         /// </summary>
         private void UpdateSelectionVisuals()
         {
+            string selectedPrefix = GetLocalizedPrefix();
+            
             // 1. 重置所有按鈕的文字為原始狀態
             foreach (var pair in _buttonTextMapping)
             {
-                string originalText = pair.Value.text.TrimStart(_selectedPrefix.ToCharArray());
+                string originalText = pair.Value.text.TrimStart(selectedPrefix.ToCharArray());
                 pair.Value.text = originalText;
             }
-            _backButtonText.text = _backButtonOriginalText;
-            _loadButton.GetComponentInChildren<TextMeshProUGUI>().text = _loadButtonOriginalText;
-            _deleteButtonText.text = _isDeleteConfirming ? _deleteButtonConfirmText : _deleteButtonNormalText;
+            
+            // 更新按鈕文字（從本地化系統獲取）
+            UpdateButtonTexts();
 
             // 2. 如果有選中的存檔文件，為該存檔項目加上前綴（即使不在當前導航列表中）
             if (!string.IsNullOrEmpty(_selectedFileName))
             {
                 foreach (var pair in _buttonTextMapping)
                 {
-                    string buttonFileName = pair.Value.text.TrimStart(_selectedPrefix.ToCharArray());
+                    string buttonFileName = pair.Value.text.TrimStart(selectedPrefix.ToCharArray());
                     if (buttonFileName == _selectedFileName)
                     {
-                        pair.Value.text = _selectedPrefix + buttonFileName;
+                        pair.Value.text = selectedPrefix + buttonFileName;
                         break;
                     }
                 }
@@ -550,8 +525,58 @@ public class SaveUIController : UIPanel
                 TextMeshProUGUI textComponent = selectedButton.GetComponentInChildren<TextMeshProUGUI>();
                 if (textComponent != null)
                 {
-                    string currentText = textComponent.text.TrimStart(_selectedPrefix.ToCharArray());
-                    textComponent.text = _selectedPrefix + currentText;
+                    string currentText = textComponent.text.TrimStart(selectedPrefix.ToCharArray());
+                    textComponent.text = selectedPrefix + currentText;
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 更新按鈕文字（從本地化系統獲取或使用回退值）
+        /// </summary>
+        private void UpdateButtonTexts()
+        {
+            // 更新載入按鈕文字
+            if (_loadButton != null)
+            {
+                TextMeshProUGUI loadButtonText = _loadButton.GetComponentInChildren<TextMeshProUGUI>();
+                if (loadButtonText != null)
+                {
+                    if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+                    {
+                        loadButtonText.text = GameSettings.Instance.GetLocalizedString("UI_Tables", "saveui.button.load");
+                    }
+                    else
+                    {
+                        loadButtonText.text = "載入"; // 回退值
+                    }
+                }
+            }
+            
+            // 更新刪除按鈕文字（根據狀態）
+            if (_deleteButtonText != null)
+            {
+                string deleteKey = _isDeleteConfirming ? "saveui.button.delete_confirm" : "saveui.button.delete";
+                if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+                {
+                    _deleteButtonText.text = GameSettings.Instance.GetLocalizedString("UI_Tables", deleteKey);
+                }
+                else
+                {
+                    _deleteButtonText.text = _isDeleteConfirming ? "確認?" : "刪除"; // 回退值
+                }
+            }
+            
+            // 更新返回按鈕文字
+            if (_backButtonText != null)
+            {
+                if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+                {
+                    _backButtonText.text = GameSettings.Instance.GetLocalizedString("UI_Tables", "saveui.button.back");
+                }
+                else
+                {
+                    _backButtonText.text = "返回"; // 回退值
                 }
             }
         }
@@ -616,15 +641,56 @@ public class SaveUIController : UIPanel
             {
                 if (_allSaveFiles.Count == 0)
                 {
-                    _pageInfoText.text = "無存檔文件";
+                    if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+                    {
+                        _pageInfoText.text = GameSettings.Instance.GetLocalizedString("UI_Tables", "saveui.message.no_save_files");
+                    }
+                    else
+                    {
+                        _pageInfoText.text = "無存檔文件"; // 回退值
+                    }
                 }
                 else
                 {
-                    _pageInfoText.text = $"第 {_currentPage + 1} 頁 / 共 {_totalPages} 頁";
+                    UpdateLocalizedPaginationInfo();
                 }
             }
-
-            Debug.Log($"[SaveUI] 當前頁: {_currentPage + 1}/{_totalPages}, 總存檔數: {_allSaveFiles.Count}");
+        }
+        
+        /// <summary>
+        /// 更新本地化的分頁信息
+        /// </summary>
+        private void UpdateLocalizedPaginationInfo()
+        {
+            if (_pageInfoText == null) return;
+            
+            if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+            {
+                string formatString = GameSettings.Instance.GetLocalizedString("UI_Tables", "saveui.pagination.page_info");
+                _pageInfoText.text = string.Format(formatString, _currentPage + 1, _totalPages);
+            }
+            else
+            {
+                // 回退機制
+                UpdatePaginationInfoWithFallback();
+            }
+        }
+        
+        /// <summary>
+        /// 使用回退機制更新分頁信息
+        /// </summary>
+        private void UpdatePaginationInfoWithFallback()
+        {
+            if (_pageInfoText == null) return;
+            
+            if (_allSaveFiles.Count == 0)
+            {
+                _pageInfoText.text = "無存檔文件";
+            }
+            else
+            {
+                _pageInfoText.text = $"第 {_currentPage + 1} 頁 / 共 {_totalPages} 頁";
+            }
         }
 
         /// <summary>
@@ -645,8 +711,6 @@ public class SaveUIController : UIPanel
 
             // 計算目標文件所在的頁面
             int targetPage = targetIndex / _itemsPerPage;
-            
-            Debug.Log($"[NavigateToSaveFile] 導航到存檔: {fileName}, 索引: {targetIndex}, 目標頁面: {targetPage + 1}");
 
             // 如果目標頁面不是當前頁面，需要切換頁面
             if (targetPage != _currentPage)
@@ -661,19 +725,369 @@ public class SaveUIController : UIPanel
             
             // 在當前頁面的按鈕中查找對應的按鈕
             int buttonIndex = 0;
+            string selectedPrefix = GetLocalizedPrefix();
             foreach (var pair in _buttonTextMapping)
             {
-                string buttonFileName = pair.Value.text.TrimStart(_selectedPrefix.ToCharArray());
+                string buttonFileName = pair.Value.text.TrimStart(selectedPrefix.ToCharArray());
                 if (buttonFileName == fileName)
                 {
                     _currentNavIndex = buttonIndex;
                     UpdateSelectionVisuals();
-                    Debug.Log($"[NavigateToSaveFile] 成功導航到存檔: {fileName}, 按鈕索引: {buttonIndex}");
                     return;
                 }
                 buttonIndex++;
             }
 
             Debug.LogWarning($"[NavigateToSaveFile] 在當前頁面中找不到存檔按鈕: {fileName}");
+        }
+        
+        #region 本地化系統
+        
+        /// <summary>
+        /// 延遲初始化以確保組件順序正確
+        /// </summary>
+        private System.Collections.IEnumerator DelayedInitialization()
+        {
+            yield return null;
+            
+            InitializeLocalization();
+        }
+        
+        /// <summary>
+        /// 初始化本地化系統
+        /// </summary>
+        private void InitializeLocalization()
+        {
+            try
+            {
+                if (UnityEngine.Localization.Settings.LocalizationSettings.Instance != null)
+                {
+                    var selectedLocale = UnityEngine.Localization.Settings.LocalizationSettings.SelectedLocale;
+                }
+                else
+                {
+                    Debug.LogWarning("[SaveUIController] Unity LocalizationSettings 實例為 null");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"[SaveUIController] 檢查 Unity LocalizationSettings 時發生異常: {e.Message}");
+            }
+            
+            CheckLocalizationComponentReferences();
+            
+            StartCoroutine(WaitForLocalizationAndUpdateUI());
+            
+            if (GameSettings.Instance != null)
+            {
+                try
+                {
+                    GameSettings.Instance.OnLanguageChanged -= OnLocalizationLanguageChanged;
+                    GameSettings.Instance.OnLanguageChanged += OnLocalizationLanguageChanged;
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogError($"[SaveUIController] 註冊語言變更事件時發生錯誤: {e.Message}");
+                }
+            }
+            else
+            {
+                Debug.LogError("[SaveUIController] 無法註冊語言變更事件 - GameSettings.Instance 為 null");
+                Debug.LogError("[SaveUIController] 這可能表示:");
+                Debug.LogError("1. GameSettings 物件在場景中不存在");
+                Debug.LogError("2. GameSettings 的 Awake() 方法尚未執行");
+                Debug.LogError("3. GameSettings 腳本有編譯錯誤");
+            }
+        }
+        
+        /// <summary>
+        /// 檢查所有本地化組件引用
+        /// </summary>
+        private void CheckLocalizationComponentReferences()
+        {
+            int nullCount = 0;
+            if (_uiTitleText == null) nullCount++;
+            if (_loadButton == null || _loadButton.GetComponentInChildren<TextMeshProUGUI>() == null) nullCount++;
+            if (_deleteButtonText == null) nullCount++;
+            if (_backButtonText == null) nullCount++;
+            if (_noSaveFilesLabel == null) nullCount++;
+            if (_pageInfoText == null) nullCount++;
+            
+            if (nullCount > 0)
+            {
+                Debug.LogError($"[SaveUIController] 發現 {nullCount} 個本地化組件引用為 null！請在 Inspector 中設置這些引用。");
+            }
+        }
+        
+        /// <summary>
+        /// 等待本地化系統初始化並更新 UI
+        /// </summary>
+        private System.Collections.IEnumerator WaitForLocalizationAndUpdateUI()
+        {
+            float startTime = Time.unscaledTime;
+            float timeout = 10f;
+            int checkCount = 0;
+            
+            // 等待 GameSettings 初始化完成
+            while (GameSettings.Instance == null || !GameSettings.Instance.IsLocalizationInitialized())
+            {
+                checkCount++;
+                float elapsedTime = Time.unscaledTime - startTime;
+                
+                if (elapsedTime > timeout)
+                {
+                    Debug.LogError($"[SaveUIController] 本地化系統初始化超時 - 等待時間: {elapsedTime:F2}s, 檢查次數: {checkCount}");
+                    Debug.LogError($"[SaveUIController] GameSettings.Instance: {(GameSettings.Instance != null ? "存在" : "null")}");
+                    
+                    if (GameSettings.Instance != null)
+                    {
+                        Debug.LogError($"[SaveUIController] GameSettings 初始化狀態: {GameSettings.Instance.IsLocalizationInitialized()}");
+                    }
+                    else
+                    {
+                        Debug.LogError("[SaveUIController] 請檢查:");
+                        Debug.LogError("1. 場景中是否存在 GameSettings 物件");
+                        Debug.LogError("2. GameSettings 腳本是否正確掛載");
+                        Debug.LogError("3. Unity Localization Package 是否正確安裝和配置");
+                    }
+                    
+                    Debug.LogWarning("[SaveUIController] 啟用回退機制：使用硬編碼文字");
+                    UpdateAllLocalizedTextsWithFallback();
+                    yield break;
+                }
+                
+                // 每秒報告一次狀態
+                if (elapsedTime > 1f && checkCount % 10 == 0)
+                {
+                    Debug.LogWarning($"[SaveUIController] 仍在等待本地化系統... 時間: {elapsedTime:F1}s, 檢查: {checkCount}");
+                    
+                    // 嘗試手動觸發 GameSettings 初始化（如果存在但未初始化）
+                    if (GameSettings.Instance != null && !GameSettings.Instance.IsLocalizationInitialized())
+                    {
+                        Debug.LogWarning("[SaveUIController] 嘗試手動觸發 GameSettings 初始化...");
+                        StartCoroutine(GameSettings.Instance.InitializeLocalization());
+                    }
+                }
+                
+                yield return new WaitForSeconds(0.1f);
+            }
+            
+            // 更新所有 UI 文字
+            UpdateAllLocalizedTexts();
+        }
+        
+        /// <summary>
+        /// 語言變更事件處理
+        /// </summary>
+        private void OnLocalizationLanguageChanged(string languageCode)
+        {
+            if (GameSettings.Instance == null)
+            {
+                Debug.LogError("[SaveUIController] 語言變更時 GameSettings.Instance 為 null！");
+                return;
+            }
+            
+            if (!GameSettings.Instance.IsLocalizationInitialized())
+            {
+                Debug.LogError("[SaveUIController] 語言變更時本地化系統尚未初始化！");
+                return;
+            }
+            
+            UpdateAllLocalizedTexts();
+        }
+        
+        /// <summary>
+        /// 更新所有 UI 元素的本地化文字
+        /// </summary>
+        private void UpdateAllLocalizedTexts()
+        {
+            if (GameSettings.Instance == null || !GameSettings.Instance.IsLocalizationInitialized())
+            {
+                Debug.LogWarning("[SaveUIController] UpdateAllLocalizedTexts: GameSettings 尚未初始化");
+                return;
+            }
+            
+            // 更新標題
+            if (_uiTitleText != null)
+            {
+                GameSettings.Instance.UpdateLocalizedText(_uiTitleText, "UI_Tables", "saveui.title");
+            }
+            else
+            {
+                Debug.LogWarning("[SaveUIController] _uiTitleText 為 null，跳過");
+            }
+            
+            // 更新載入按鈕文字
+            if (_loadButton != null)
+            {
+                TextMeshProUGUI loadButtonText = _loadButton.GetComponentInChildren<TextMeshProUGUI>();
+                if (loadButtonText != null)
+                {
+                    GameSettings.Instance.UpdateLocalizedText(loadButtonText, "UI_Tables", "saveui.button.load");
+                }
+                else
+                {
+                    Debug.LogWarning("[SaveUIController] _loadButton 缺少 TextMeshProUGUI 組件，跳過");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[SaveUIController] _loadButton 為 null，跳過");
+            }
+            
+            if (_deleteButtonText != null)
+            {
+                string deleteKey = _isDeleteConfirming ? "saveui.button.delete_confirm" : "saveui.button.delete";
+                GameSettings.Instance.UpdateLocalizedText(_deleteButtonText, "UI_Tables", deleteKey);
+            }
+            else
+            {
+                Debug.LogWarning("[SaveUIController] _deleteButtonText 為 null，跳過");
+            }
+            
+            if (_backButtonText != null)
+            {
+                GameSettings.Instance.UpdateLocalizedText(_backButtonText, "UI_Tables", "saveui.button.back");
+            }
+            else
+            {
+                Debug.LogWarning("[SaveUIController] _backButtonText 為 null，跳過");
+            }
+            
+            // 更新無存檔文件標籤
+            if (_noSaveFilesLabel != null)
+            {
+                GameSettings.Instance.UpdateLocalizedText(_noSaveFilesLabel, "UI_Tables", "saveui.message.no_save_files");
+            }
+            else
+            {
+                Debug.LogWarning("[SaveUIController] _noSaveFilesLabel 為 null，跳過");
+            }
+            
+            // 更新分頁信息（需要格式化處理）
+            UpdateLocalizedPaginationInfo();
+        }
+        
+        /// <summary>
+        /// 使用硬編碼文字作為回退機制更新 UI
+        /// </summary>
+        private void UpdateAllLocalizedTextsWithFallback()
+        {
+            // 使用硬編碼的繁體中文文字作為回退
+            if (_uiTitleText != null)
+            {
+                _uiTitleText.text = "存檔管理";
+            }
+            
+            if (_loadButton != null)
+            {
+                TextMeshProUGUI loadButtonText = _loadButton.GetComponentInChildren<TextMeshProUGUI>();
+                if (loadButtonText != null)
+                {
+                    loadButtonText.text = "載入";
+                }
+            }
+            
+            if (_deleteButtonText != null)
+            {
+                _deleteButtonText.text = _isDeleteConfirming ? "確認?" : "刪除";
+            }
+            
+            if (_backButtonText != null)
+            {
+                _backButtonText.text = "返回";
+            }
+            
+            if (_noSaveFilesLabel != null)
+            {
+                _noSaveFilesLabel.text = "無存檔文件";
+            }
+            
+            // 更新分頁信息
+            UpdatePaginationInfoWithFallback();
+        }
+        
+        /// <summary>
+        /// 獲取本地化的選中前綴
+        /// </summary>
+        private string GetLocalizedPrefix()
+        {
+            if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+            {
+                return GameSettings.Instance.GetLocalizedString("UI_Tables", "saveui.navigation.prefix");
+            }
+            return "> "; // 回退值
+        }
+        
+        /// <summary>
+        /// 手動觸發本地化文字更新（用於除錯）
+        /// </summary>
+        [ContextMenu("手動更新本地化文字")]
+        public void ForceUpdateLocalization()
+        {
+            Debug.Log("[SaveUIController] ===== 手動觸發本地化更新 =====");
+            
+            if (GameSettings.Instance == null)
+            {
+                Debug.LogError("[SaveUIController] GameSettings.Instance 為 null！請確保場景中存在 GameSettings。");
+                return;
+            }
+            
+            if (!GameSettings.Instance.IsLocalizationInitialized())
+            {
+                Debug.LogError("[SaveUIController] GameSettings 尚未初始化！請等待初始化完成。");
+                return;
+            }
+            
+            Debug.Log($"[SaveUIController] 當前語言: {GameSettings.Instance.GetCurrentLanguageCode()}");
+            
+            // 檢查組件引用
+            CheckLocalizationComponentReferences();
+            
+            // 強制更新所有本地化文字
+            UpdateAllLocalizedTexts();
+            
+            Debug.Log("[SaveUIController] ===== 手動本地化更新完成 =====");
+        }
+        
+        /// <summary>
+        /// 檢查本地化系統狀態（用於除錯）
+        /// </summary>
+        [ContextMenu("檢查本地化系統狀態")]
+        public void CheckLocalizationSystemStatus()
+        {
+            Debug.Log("[SaveUIController] ===== 本地化系統狀態檢查 =====");
+            Debug.Log($"GameSettings.Instance 存在: {GameSettings.Instance != null}");
+            
+            if (GameSettings.Instance != null)
+            {
+                Debug.Log($"GameSettings 已初始化: {GameSettings.Instance.IsLocalizationInitialized()}");
+                Debug.Log($"當前語言: {GameSettings.Instance.GetCurrentLanguageCode()}");
+                var availableLanguages = GameSettings.Instance.GetAvailableLanguages();
+                Debug.Log($"可用語言: {string.Join(", ", availableLanguages)}");
+                
+                // 測試獲取本地化文字
+                string testText = GameSettings.Instance.GetLocalizedString("UI_Tables", "saveui.title");
+                Debug.Log($"測試獲取本地化文字 'saveui.title': '{testText}'");
+            }
+            
+            CheckLocalizationComponentReferences();
+            Debug.Log("[SaveUIController] ===== 狀態檢查完成 =====");
+        }
+        
+        #endregion
+        
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                // 取消註冊本地化事件
+                if (GameSettings.Instance != null)
+                {
+                    GameSettings.Instance.OnLanguageChanged -= OnLocalizationLanguageChanged;
+                }
+                
+                Instance = null;
+            }
         }
     }

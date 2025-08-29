@@ -1,0 +1,43 @@
+Key,Id,English(en),Chinese (Traditional)(zh-TW),Chinese (Simplified)(zh-CN),Japanese(ja)
+settings.graphics.resolution,,Resolution,解析度,解析度,解像度
+settings.graphics.fps_limit,,FPS Limit,FPS限制,FPS限制,FPS制限
+settings.graphics.vsync,,VSync,垂直同步,垂直同步,垂直同期
+settings.graphics.antialiasing,,Anti-aliasing,抗鋸齒,抗锯齿,アンチエイリアシング
+settings.audio.volume,,Volume,音量,音量,音量
+settings.language.title,,Language,語言,语言,言語
+settings.button.reset,,Reset,重置,重置,リセット
+settings.button.back,,Back,返回,返回,戻る
+settings.options.disabled,,Disabled,關閉,关闭,無効
+settings.options.enabled,,Enabled,開啟,开启,有効
+settings.options.unlimited,,Unlimited,無限制,无限制,無制限
+settings.fps.30,,30 FPS,30 FPS,30 FPS,30 FPS
+settings.fps.60,,60 FPS,60 FPS,60 FPS,60 FPS
+settings.fps.120,,120 FPS,120 FPS,120 FPS,120 FPS
+settings.fps.144,,144 FPS,144 FPS,144 FPS,144 FPS
+settings.antialiasing.off,,Off,關閉,关闭,オフ
+settings.antialiasing.2x,,MSAA 2x,MSAA 2x,MSAA 2x,MSAA 2x
+settings.antialiasing.4x,,MSAA 4x,MSAA 4x,MSAA 4x,MSAA 4x
+settings.antialiasing.8x,,MSAA 8x,MSAA 8x,MSAA 8x,MSAA 8x
+settings.language.zh_tw,,Traditional Chinese,繁體中文,繁体中文,繁体中国語
+settings.language.zh_cn,,Simplified Chinese,簡體中文,简体中文,簡体中国語
+settings.language.en,,English,English,English,英語
+settings.language.ja,,Japanese,日本語,日本语,日本語
+menu.button.resume,,Resume Game,繼續遊戲,继续游戏,ゲーム再開
+menu.button.save,,Save Game,儲存遊戲,保存游戏,ゲーム保存
+menu.button.load,,Load Game,載入遊戲,加载游戏,ゲーム読込
+menu.button.settings,,Settings,設定,设置,設定
+menu.button.exit,,Exit Game,離開遊戲,退出游戏,ゲーム終了
+menu.status.saved,,Saved,已儲存,已保存,保存済み
+menu.message.save_failed,,Save failed! Check disk space,儲存失敗！請檢查磁碟空間,保存失败！请检查磁盘空间,保存に失敗しました！ディスク容量を確認してください
+menu.message.save_system_error,,Save system not initialized,儲存系統未初始化,保存系统未初始化,保存システムが初期化されていません
+menu.message.settings_system_error,,Settings system not initialized,設定系統未初始化,设置系统未初始化,設定システムが初期化されていません
+saveui.title,,Save Files,存檔管理,存档管理,セーブファイル
+saveui.button.load,,Load,載入,加载,読込
+saveui.button.delete,,Delete,刪除,删除,削除
+saveui.button.delete_confirm,,Confirm?,確認?,确认?,確認?
+saveui.button.back,,Back,返回,返回,戻る
+saveui.message.no_save_files,,No save files,無存檔文件,无存档文件,セーブファイルがありません
+saveui.pagination.page_info,,Page {0} of {1},第 {0} 頁 / 共 {1} 頁,第 {0} 页 / 共 {1} 页,{1}ページ中{0}ページ
+saveui.navigation.prefix,,> ,> ,> ,> 
+saveui.message.load_failed,,Failed to load save file,載入存檔失敗,加载存档失败,セーブファイルの読込に失敗しました
+saveui.message.delete_success,,Save file deleted,存檔文件已刪除,存档文件已删除,セーブファイルを削除しました

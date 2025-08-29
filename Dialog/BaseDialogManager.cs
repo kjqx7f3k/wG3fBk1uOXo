@@ -34,7 +34,7 @@ public abstract class BaseDialogManager : UIPanel
     protected float lastNavigationTime = 0f; // 上次導航的時間
     
     [Header("多語言設定")]
-    [SerializeField] protected string dialogBasePath = "StreamingAssets/Dialogs"; // 對話文件基礎路徑
+    [SerializeField] protected string dialogBasePath = "Dialogs"; // 對話文件基礎路徑
     [SerializeField] protected string defaultLanguage = "en"; // 預設語言代碼
     
     // 動態文字控制變數
@@ -206,43 +206,163 @@ public abstract class BaseDialogManager : UIPanel
     /// </summary>
     private void InitializeLocalizationSystem()
     {
-        Debug.Log($"[{GetType().Name}] 開始初始化多語言系統，基礎路徑: {dialogBasePath}");
+        // Debug.log($"[{GetType().Name}] ===== 開始初始化多語言系統 =====");
+        // Debug.log($"[{GetType().Name}] 對話文件基礎路徑: {dialogBasePath}");
+        
+        // 構建完整路徑用於驗證
+        string fullBasePath = System.IO.Path.Combine(Application.dataPath, dialogBasePath);
+        // Debug.log($"[{GetType().Name}] 完整對話文件路徑: {fullBasePath}");
+        
+        // 檢查路徑是否存在
+        if (!System.IO.Directory.Exists(fullBasePath))
+        {
+            Debug.LogError($"[{GetType().Name}] 對話文件基礎路徑不存在: {fullBasePath}");
+            Debug.LogError($"[{GetType().Name}] 請檢查 dialogBasePath 設定或確保對話文件存在");
+            return;
+        }
         
         int loadedLanguageCount = DialogDataLoader.LoadAllLanguageDialogs(dialogBasePath);
+        // Debug.log($"[{GetType().Name}] DialogDataLoader 載入結果: {loadedLanguageCount} 種語言");
         
         if (loadedLanguageCount > 0)
         {
-            // 設定預設語言
-            if (!DialogDataLoader.SetCurrentLanguage(defaultLanguage))
+            // 優先使用 GameSettings 的語言設定
+            string initialLanguage = defaultLanguage;
+            
+            if (GameSettings.Instance != null)
             {
-                // 如果預設語言不存在，使用第一個可用語言
-                string[] supportedLanguages = DialogDataLoader.GetSupportedLanguages();
-                if (supportedLanguages.Length > 0)
-                {
-                    DialogDataLoader.SetCurrentLanguage(supportedLanguages[0]);
-                    Debug.LogWarning($"[{GetType().Name}] 預設語言 '{defaultLanguage}' 不存在，改用 '{supportedLanguages[0]}'");
-                }
+                string gameSettingsLanguage = GameSettings.Instance.GetCurrentLanguageCode();
+                initialLanguage = gameSettingsLanguage;
+                // Debug.log($"[{GetType().Name}] 使用 GameSettings 語言設定: '{gameSettingsLanguage}'");
+            }
+            else
+            {
+                // 如果 GameSettings 不可用，使用預設語言
+                Debug.LogWarning($"[{GetType().Name}] GameSettings 不可用，使用預設語言: '{defaultLanguage}'");
+                initialLanguage = defaultLanguage;
             }
             
-            Debug.Log($"[{GetType().Name}] 多語言系統初始化完成，載入 {loadedLanguageCount} 種語言");
-            Debug.Log($"[{GetType().Name}] 當前語言: {DialogDataLoader.GetCurrentLanguage()}");
-            Debug.Log($"[{GetType().Name}] 支援語言: {string.Join(", ", DialogDataLoader.GetSupportedLanguages())}");
+            // 顯示支援的語言
+            string[] supportedLanguages = DialogDataLoader.GetSupportedLanguages();
+            // Debug.log($"[{GetType().Name}] DialogDataLoader 支援的語言: [{string.Join(", ", supportedLanguages)}]");
+            
+            // 設定初始語言，加強驗證邏輯
+            // Debug.log($"[{GetType().Name}] 嘗試設定初始語言: '{initialLanguage}'");
+            if (!DialogDataLoader.SetCurrentLanguage(initialLanguage))
+            {
+                Debug.LogWarning($"[{GetType().Name}] 無法設定初始語言 '{initialLanguage}'，開始 fallback 處理");
+                
+                // 如果設定的語言不存在，使用 fallback 策略
+                if (supportedLanguages.Length > 0)
+                {
+                    string fallbackLanguage = FindBestFallbackLanguage(initialLanguage, supportedLanguages);
+                    if (!string.IsNullOrEmpty(fallbackLanguage))
+                    {
+                        // Debug.log($"[{GetType().Name}] 嘗試設定最佳 fallback 語言: '{fallbackLanguage}'");
+                        if (DialogDataLoader.SetCurrentLanguage(fallbackLanguage))
+                        {
+                            Debug.LogWarning($"[{GetType().Name}] 初始語言 '{initialLanguage}' 不存在，使用最佳 fallback 語言: '{fallbackLanguage}'");
+                        }
+                        else
+                        {
+                            Debug.LogError($"[{GetType().Name}] 無法設定 fallback 語言: '{fallbackLanguage}'");
+                        }
+                    }
+                    else
+                    {
+                        // 使用第一個可用語言作為最後的 fallback
+                        // Debug.log($"[{GetType().Name}] 嘗試設定第一個可用語言: '{supportedLanguages[0]}'");
+                        if (DialogDataLoader.SetCurrentLanguage(supportedLanguages[0]))
+                        {
+                            Debug.LogWarning($"[{GetType().Name}] 使用第一個可用語言作為最後 fallback: '{supportedLanguages[0]}'");
+                        }
+                        else
+                        {
+                            Debug.LogError($"[{GetType().Name}] 連第一個可用語言都無法設定: '{supportedLanguages[0]}'");
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"[{GetType().Name}] 沒有任何支援的語言可用！");
+                }
+            }
+            else
+            {
+                // Debug.log($"[{GetType().Name}] 成功設定初始語言: '{initialLanguage}'");
+            }
+            
+            // 語言變更事件訂閱將在 Start() 中進行延遲處理
+            // Debug.log($"[{GetType().Name}] 語言變更事件訂閱將在 Start() 中進行延遲處理");
+            
+            // 最終狀態報告
+            string finalLanguage = DialogDataLoader.GetCurrentLanguage();
+            // Debug.log($"[{GetType().Name}] ===== 多語言系統初始化完成 =====");
+            // Debug.log($"[{GetType().Name}] 載入語言數量: {loadedLanguageCount}");
+            // Debug.log($"[{GetType().Name}] 最終設定語言: '{finalLanguage}'");
+            // Debug.log($"[{GetType().Name}] 支援語言列表: [{string.Join(", ", DialogDataLoader.GetSupportedLanguages())}]");
         }
         else
         {
-            Debug.LogError($"[{GetType().Name}] 多語言系統初始化失敗，無法載入任何語言文件，路徑: {dialogBasePath}");
+            Debug.LogError($"[{GetType().Name}] ===== 多語言系統初始化失敗 =====");
+            Debug.LogError($"[{GetType().Name}] 無法載入任何語言文件，基礎路徑: {dialogBasePath}");
+            Debug.LogError($"[{GetType().Name}] 完整路徑: {fullBasePath}");
+            Debug.LogError($"[{GetType().Name}] 請檢查對話文件是否存在於正確位置");
         }
+    }
+    
+    /// <summary>
+    /// Unity Start 方法 - 初始化延遲處理
+    /// </summary>
+    protected virtual void Start()
+    {
+        // 啟動延遲事件訂閱協程
+        StartCoroutine(DelayedEventSubscription());
+    }
+    
+    /// <summary>
+    /// 延遲事件訂閱協程 - 等待 GameSettings 初始化完成
+    /// </summary>
+    private IEnumerator DelayedEventSubscription()
+    {
+        // Debug.log($"[{GetType().Name}] 開始延遲事件訂閱，等待 GameSettings 初始化...");
+        
+        float waitTime = 0f;
+        const float maxWaitTime = 10f; // 最大等待時間（秒）
+        const float checkInterval = 0.1f; // 檢查間隔
+        
+        // 等待 GameSettings.Instance 可用
+        while (GameSettings.Instance == null && waitTime < maxWaitTime)
+        {
+            yield return new WaitForSeconds(checkInterval);
+            waitTime += checkInterval;
+        }
+        
+        if (GameSettings.Instance == null)
+        {
+            Debug.LogError($"[{GetType().Name}] 等待 {maxWaitTime} 秒後 GameSettings.Instance 仍為 null，無法訂閱語言變更事件");
+            yield break;
+        }
+        
+        // 訂閱語言變更事件
+        // Debug.log($"[{GetType().Name}] GameSettings 已就緒，開始訂閱語言變更事件 (等待時間: {waitTime:F2} 秒)");
+        SubscribeToLanguageEvents();
+        
+        // Debug.log($"[{GetType().Name}] 延遲事件訂閱完成");
     }
     
     protected virtual void OnDestroy()
     {
+        // 取消訂閱語言變更事件
+        UnsubscribeFromLanguageEvents();
+        
         // 清理引用
         dialogLines.Clear();
         currentOptions.Clear();
         currentModel = null;
         currentDialogData = null;
         
-        Debug.Log($"{GetType().Name} 已清理");
+        // Debug.log($"{GetType().Name} 已清理");
     }
     
     protected virtual void OnApplicationQuit()
@@ -274,7 +394,7 @@ public abstract class BaseDialogManager : UIPanel
         
         // 隱藏整個DialogPanel，使用重寫的Close方法
         Close(); 
-        Debug.Log($"隱藏{GetType().Name}");
+        // Debug.log($"隱藏{GetType().Name}");
         if (currentModel != null)
         {
             // 只清理引用，不改變模型的 active 狀態
@@ -297,7 +417,7 @@ public abstract class BaseDialogManager : UIPanel
         isOptionsCursorVisible = true;
         currentOptionIndex = 0;
         
-        Debug.Log($"{GetType().Name}對話結束");
+        // Debug.log($"{GetType().Name}對話結束");
     }
     
     protected virtual void ShowDialogUI(GameObject model)
@@ -305,15 +425,15 @@ public abstract class BaseDialogManager : UIPanel
         // 首先確保DialogPanel本身是啟用的，使用重寫的Open方法
         Open();
         EnsureOptionsUIInitialState(); // 新增：在顯示UI時，確保選項被重置和隱藏
-        Debug.Log($"啟用{GetType().Name}");
+        // Debug.log($"啟用{GetType().Name}");
         if (model != null)
         {
             currentModel = model;
             currentModel.SetActive(true);
-            Debug.Log("啟用對話模型");
+            // Debug.log("啟用對話模型");
         }
         
-        Debug.Log($"{GetType().Name}對話開始");
+        // Debug.log($"{GetType().Name}對話開始");
     }
     
     /// <summary>
@@ -322,7 +442,7 @@ public abstract class BaseDialogManager : UIPanel
     protected override void OnOpened()
     {
         base.OnOpened();
-        Debug.Log($"{GetType().Name}UI已開啟");
+        // Debug.log($"{GetType().Name}UI已開啟");
     }
     
     /// <summary>
@@ -365,7 +485,7 @@ public abstract class BaseDialogManager : UIPanel
         isDisplayingOptions = false;
         isOptionsCursorVisible = true;
         
-        Debug.Log($"{GetType().Name}對話結束");
+        // Debug.log($"{GetType().Name}對話結束");
     }
     
     /// <summary>
@@ -417,7 +537,7 @@ public abstract class BaseDialogManager : UIPanel
     {
         if (IsInDialog)
         {
-            Debug.Log($"[{GetType().Name}] 強制關閉對話");
+            // Debug.log($"[{GetType().Name}] 強制關閉對話");
             HideDialogUI();
         }
     }
@@ -493,7 +613,7 @@ public abstract class BaseDialogManager : UIPanel
         dialogLines = loadResult.dialogLines;
         currentDialogData = loadResult.dialogData;
         
-        Debug.Log($"[{GetType().Name}] 成功載入本地化對話: {dialogId} [{DialogDataLoader.GetCurrentLanguage()}]");
+        // Debug.log($"[{GetType().Name}] 成功載入本地化對話: {dialogId} [{DialogDataLoader.GetCurrentLanguage()}]");
         
         // 開始顯示對話
         if (dialogLines.Count > 0)
@@ -791,7 +911,7 @@ public abstract class BaseDialogManager : UIPanel
     /// <returns></returns>
     protected IEnumerator ExecuteNewDelCommand(float deleteTime, string deleteString, string replaceString)
     {
-        Debug.Log($"文字控制: 刪除字串 '{deleteString}'，刪除速度 {deleteTime}，替換為 '{replaceString}'");
+        // Debug.log($"文字控制: 刪除字串 '{deleteString}'，刪除速度 {deleteTime}，替換為 '{replaceString}'");
         
         // 先逐字顯示要被刪除的字串
         foreach (char c in deleteString)
@@ -884,7 +1004,7 @@ public abstract class BaseDialogManager : UIPanel
     public void GetCacheInfo()
     {
     #if UNITY_EDITOR
-        Debug.Log(DialogCacheManager.GetCacheInfo());
+        // Debug.log(DialogCacheManager.GetCacheInfo());
     #else
         Debug.LogWarning("GetCacheInfo 只能在編輯器中使用！");
     #endif
@@ -912,7 +1032,7 @@ public abstract class BaseDialogManager : UIPanel
             {
                 if (ConditionChecker.CheckCondition(condition.condition))
                 {
-                    Debug.Log($"起始對話條件滿足，使用對話ID: {condition.dialogId}");
+                    // Debug.log($"起始對話條件滿足，使用對話ID: {condition.dialogId}");
                     return condition.dialogId;
                 }
             }
@@ -920,7 +1040,7 @@ public abstract class BaseDialogManager : UIPanel
         
         // 如果沒有條件滿足，使用預設起始對話ID
         int defaultId = currentDialogData.defaultInitialDialogId > 0 ? currentDialogData.defaultInitialDialogId : 1;
-        Debug.Log($"使用預設起始對話ID: {defaultId}");
+        // Debug.log($"使用預設起始對話ID: {defaultId}");
         return defaultId;
     }
     
@@ -961,14 +1081,14 @@ public abstract class BaseDialogManager : UIPanel
             {
                 if (ConditionChecker.CheckCondition(condition.condition))
                 {
-                    Debug.Log($"下一個對話條件滿足，跳轉到對話ID: {condition.nextId}");
+                    // Debug.log($"下一個對話條件滿足，跳轉到對話ID: {condition.nextId}");
                     return condition.nextId;
                 }
             }
         }
         
         // 如果沒有條件滿足，使用預設的nextId
-        Debug.Log($"使用預設下一個對話ID: {currentEntry.nextId}");
+        // Debug.log($"使用預設下一個對話ID: {currentEntry.nextId}");
         return currentEntry.nextId;
     }
     
@@ -1045,14 +1165,14 @@ public abstract class BaseDialogManager : UIPanel
             {
                 if (ConditionChecker.CheckCondition(conditionalNext.condition))
                 {
-                    Debug.Log($"選項條件性下一個對話條件滿足，跳轉到對話ID: {conditionalNext.nextId}");
+                    // Debug.log($"選項條件性下一個對話條件滿足，跳轉到對話ID: {conditionalNext.nextId}");
                     return conditionalNext.nextId;
                 }
             }
         }
         
         // 如果沒有條件滿足，使用預設的nextId
-        Debug.Log($"使用選項預設下一個對話ID: {selectedOption.nextId}");
+        // Debug.log($"使用選項預設下一個對話ID: {selectedOption.nextId}");
         return selectedOption.nextId;
     }
     
@@ -1072,4 +1192,275 @@ public abstract class BaseDialogManager : UIPanel
             default: return null;
         }
     }
+    
+    // ==================== 語言變更事件系統 ====================
+    
+    /// <summary>
+    /// 訂閱語言變更事件
+    /// </summary>
+    private void SubscribeToLanguageEvents()
+    {
+        // 訂閱 GameSettings 語言變更事件
+        if (GameSettings.Instance != null)
+        {
+            try
+            {
+                // 先嘗試取消註冊（防止重複）
+                GameSettings.Instance.OnLanguageChanged -= OnGameSettingsLanguageChanged;
+                // 然後重新註冊
+                GameSettings.Instance.OnLanguageChanged += OnGameSettingsLanguageChanged;
+                // Debug.log($"[{GetType().Name}] 已訂閱 GameSettings 語言變更事件");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[{GetType().Name}] 訂閱 GameSettings 語言變更事件時發生錯誤: {e.Message}");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"[{GetType().Name}] GameSettings.Instance 為 null，無法訂閱語言變更事件");
+        }
+    }
+    
+    /// <summary>
+    /// 取消訂閱語言變更事件
+    /// </summary>
+    private void UnsubscribeFromLanguageEvents()
+    {
+        // 取消訂閱 GameSettings 語言變更事件
+        if (GameSettings.Instance != null)
+        {
+            try
+            {
+                GameSettings.Instance.OnLanguageChanged -= OnGameSettingsLanguageChanged;
+                // Debug.log($"[{GetType().Name}] 已取消訂閱 GameSettings 語言變更事件");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[{GetType().Name}] 取消訂閱 GameSettings 語言變更事件時發生錯誤: {e.Message}");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// GameSettings 語言變更事件處理
+    /// </summary>
+    /// <param name="newLanguageCode">新的語言代碼</param>
+    private void OnGameSettingsLanguageChanged(string newLanguageCode)
+    {
+        // Debug.log($"[{GetType().Name}] ===== GameSettings 語言變更事件觸發 =====");
+        // Debug.log($"[{GetType().Name}] 接收到新語言代碼: '{newLanguageCode}'");
+        // Debug.log($"[{GetType().Name}] 當前 DialogDataLoader 語言: '{DialogDataLoader.GetCurrentLanguage()}'");
+        
+        // 驗證和設定對話系統語言
+        string dialogLanguage = newLanguageCode;
+        // Debug.log($"[{GetType().Name}] 目標對話語言: '{dialogLanguage}'");
+        
+        // 檢查 DialogDataLoader 是否已初始化
+        if (!DialogDataLoader.IsLocalizationInitialized())
+        {
+            Debug.LogWarning($"[{GetType().Name}] DialogDataLoader 尚未初始化，跳過語言同步");
+            return;
+        }
+        
+        // 顯示支援的語言列表
+        string[] supportedLanguages = DialogDataLoader.GetSupportedLanguages();
+        // Debug.log($"[{GetType().Name}] DialogDataLoader 支援的語言: [{string.Join(", ", supportedLanguages)}]");
+        
+        // 嘗試設定對話系統語言
+        // Debug.log($"[{GetType().Name}] 嘗試將 DialogDataLoader 語言切換到: '{dialogLanguage}'");
+        if (DialogDataLoader.SetCurrentLanguage(dialogLanguage))
+        {
+            // Debug.log($"[{GetType().Name}] ✅ 對話系統語言成功切換到: '{dialogLanguage}'");
+            
+            // 觸發對話內容更新（即使沒有對話進行中也要更新）
+            OnLanguageChangedRefresh();
+        }
+        else
+        {
+            Debug.LogWarning($"[{GetType().Name}] ⚠️ 無法將對話系統語言切換到: '{dialogLanguage}'");
+            Debug.LogWarning($"[{GetType().Name}] 可用語言: [{string.Join(", ", supportedLanguages)}]");
+            
+            // 嘗試使用支援的語言中最相近的語言
+            string fallbackLanguage = FindBestFallbackLanguage(dialogLanguage, supportedLanguages);
+            if (!string.IsNullOrEmpty(fallbackLanguage))
+            {
+                Debug.LogWarning($"[{GetType().Name}] 嘗試使用最佳 fallback 語言: '{fallbackLanguage}'");
+                if (DialogDataLoader.SetCurrentLanguage(fallbackLanguage))
+                {
+                    Debug.LogWarning($"[{GetType().Name}] ✅ 成功使用 fallback 語言: '{fallbackLanguage}'");
+                    OnLanguageChangedRefresh();
+                }
+                else
+                {
+                    Debug.LogError($"[{GetType().Name}] ❌ 連 fallback 語言都無法設定: '{fallbackLanguage}'");
+                }
+            }
+            else
+            {
+                Debug.LogError($"[{GetType().Name}] ❌ 找不到合適的 fallback 語言");
+            }
+        }
+        
+        string finalLanguage = DialogDataLoader.GetCurrentLanguage();
+        // Debug.log($"[{GetType().Name}] ===== GameSettings 語言變更處理完成 =====");
+        // Debug.log($"[{GetType().Name}] 最終 DialogDataLoader 語言: '{finalLanguage}'");
+    }
+    
+    /// <summary>
+    /// 語言變更後的刷新處理
+    /// </summary>
+    private void OnLanguageChangedRefresh()
+    {
+        // Debug.log($"[{GetType().Name}] ===== 開始語言變更刷新處理 =====");
+        // Debug.log($"[{GetType().Name}] 當前對話狀態 - IsInDialog: {IsInDialog}, currentDialogFile: '{currentDialogFile}'");
+        
+        // 如果有對話正在進行，刷新對話內容
+        if (IsInDialog && !string.IsNullOrEmpty(currentDialogFile))
+        {
+            // Debug.log($"[{GetType().Name}] 檢測到對話進行中，開始刷新對話內容: '{currentDialogFile}'");
+            RefreshDialogContentWithNewLanguage();
+        }
+        else
+        {
+            // Debug.log($"[{GetType().Name}] 沒有正在進行的對話，跳過內容刷新");
+        }
+        
+        // 這裡可以添加其他需要在語言變更時執行的邏輯
+        string currentLanguage = DialogDataLoader.GetCurrentLanguage();
+        // Debug.log($"[{GetType().Name}] ===== 語言變更刷新完成 =====");
+        // Debug.log($"[{GetType().Name}] 最終確認 DialogDataLoader 語言: '{currentLanguage}'");
+    }
+    
+    /// <summary>
+    /// 尋找最佳 fallback 語言
+    /// </summary>
+    /// <param name="targetLanguage">目標語言</param>
+    /// <param name="supportedLanguages">支援的語言列表</param>
+    /// <returns>最佳 fallback 語言，如果找不到返回null</returns>
+    private string FindBestFallbackLanguage(string targetLanguage, string[] supportedLanguages)
+    {
+        if (string.IsNullOrEmpty(targetLanguage) || supportedLanguages == null || supportedLanguages.Length == 0)
+        {
+            return null;
+        }
+        
+        // 1. 直接匹配
+        foreach (string lang in supportedLanguages)
+        {
+            if (string.Equals(lang, targetLanguage, StringComparison.OrdinalIgnoreCase))
+            {
+                return lang;
+            }
+        }
+        
+        // 2. 語言家族匹配（例如 zh-TW 和 zh-CN）
+        string targetBase = targetLanguage.Split('-')[0].ToLower();
+        foreach (string lang in supportedLanguages)
+        {
+            string langBase = lang.Split('-')[0].ToLower();
+            if (targetBase == langBase)
+            {
+                // Debug.log($"[{GetType().Name}] 找到語言家族匹配: {targetLanguage} -> {lang}");
+                return lang;
+            }
+        }
+        
+        // 3. 常見語言映射
+        var languageMapping = new Dictionary<string, string[]>
+        {
+            {"en", new[]{"en-US", "english"}},
+            {"zh", new[]{"zh-TW", "zh-CN", "chinese"}},
+            {"ja", new[]{"ja-JP", "japanese"}},
+            {"ko", new[]{"ko-KR", "korean"}},
+            {"fr", new[]{"fr-FR", "french"}},
+            {"de", new[]{"de-DE", "german"}},
+            {"es", new[]{"es-ES", "spanish"}},
+            {"pt", new[]{"pt-BR", "pt-PT", "portuguese"}},
+            {"ru", new[]{"ru-RU", "russian"}},
+            {"it", new[]{"it-IT", "italian"}}
+        };
+        
+        foreach (var mapping in languageMapping)
+        {
+            if (targetBase == mapping.Key)
+            {
+                foreach (string candidate in mapping.Value)
+                {
+                    foreach (string lang in supportedLanguages)
+                    {
+                        if (string.Equals(lang, candidate, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Debug.log($"[{GetType().Name}] 找到語言映射匹配: {targetLanguage} -> {lang}");
+                            return lang;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 4. 如果都找不到，返回第一個支援的語言作為最後的 fallback
+        if (supportedLanguages.Length > 0)
+        {
+            Debug.LogWarning($"[{GetType().Name}] 找不到相似語言，使用第一個可用語言: {supportedLanguages[0]}");
+            return supportedLanguages[0];
+        }
+        
+        return null;
+    }
+    
+    /// <summary>
+    /// 刷新對話內容為新語言（即時更新機制）
+    /// </summary>
+    private void RefreshDialogContentWithNewLanguage()
+    {
+        if (string.IsNullOrEmpty(currentDialogFile))
+        {
+            Debug.LogWarning($"[{GetType().Name}] 當前對話文件為空，無法刷新內容");
+            return;
+        }
+        
+        // Debug.log($"[{GetType().Name}] 開始重載對話內容: {currentDialogFile}");
+        
+        // 重載對話數據
+        var loadResult = DialogDataLoader.LoadLocalizedDialogData(currentDialogFile);
+        if (!loadResult.success || loadResult.dialogData == null)
+        {
+            Debug.LogError($"[{GetType().Name}] 重載對話失敗: {currentDialogFile}");
+            return;
+        }
+        
+        // 更新對話數據和對話行
+        dialogLines = loadResult.dialogLines;
+        currentDialogData = loadResult.dialogData;
+        // Debug.log($"[{GetType().Name}] 對話數據已更新，共 {dialogLines.Count} 行對話");
+        
+        // 如果當前有顯示的對話，更新其內容
+        if (dialogLines.ContainsKey(currentDialogId))
+        {
+            var currentLine = dialogLines[currentDialogId];
+            
+            // 如果打字動畫已完成且有對話文字，即時更新文字內容
+            if (isTypingComplete && dialogText != null && !string.IsNullOrEmpty(currentLine.text))
+            {
+                currentDisplayText = currentLine.text;
+                UpdateDialogDisplay();
+                // Debug.log($"[{GetType().Name}] 已更新對話文字內容");
+            }
+            
+            // 如果正在顯示選項，重新顯示選項
+            if (isDisplayingOptions && currentLine.options.Count > 0)
+            {
+                ShowOptions(currentLine.options);
+                // Debug.log($"[{GetType().Name}] 已更新選項內容，共 {currentLine.options.Count} 個選項");
+            }
+        }
+        else
+        {
+            Debug.LogWarning($"[{GetType().Name}] 在新語言數據中找不到當前對話ID: {currentDialogId}");
+        }
+        
+        // Debug.log($"[{GetType().Name}] 對話內容刷新完成");
+    }
+    
 }

@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 using UnityEngine.EventSystems; // 新增: 處理 UI 選中狀態
+using UnityEngine.Localization;
 
 /// <summary>
 /// 遊戲選單管理器 - 獨立管理遊戲選單UI和功能
@@ -18,6 +19,13 @@ public class GameMenuManager : UIPanel
     [SerializeField] private Button loadGameButton;
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button exitGameButton;
+    
+    [Header("本地化組件")]
+    [SerializeField] private TextMeshProUGUI resumeButtonText;
+    [SerializeField] private TextMeshProUGUI saveButtonText;
+    [SerializeField] private TextMeshProUGUI loadButtonText;
+    [SerializeField] private TextMeshProUGUI settingsButtonText;
+    [SerializeField] private TextMeshProUGUI exitButtonText;
     
     // 遊戲選單導航
     private int selectedMenuIndex = 0;
@@ -86,13 +94,24 @@ public class GameMenuManager : UIPanel
     /// </summary>
     private System.Collections.IEnumerator DelayedEventSubscription()
     {
+        Debug.Log("[GameMenuManager] ===== 開始延遲初始化流程 =====");
+        Debug.Log($"[GameMenuManager] 初始狀態檢查 - Time.unscaledTime: {Time.unscaledTime:F2}s");
+        
         // 等待 InputSystemWrapper 初始化
         int waitCount = 0;
+        float startTime = Time.unscaledTime;
         while (InputSystemWrapper.Instance == null && waitCount < 100) // 最多等待100幀
         {
             waitCount++;
+            if (waitCount % 10 == 0) // 每10幀記錄一次
+            {
+                Debug.Log($"[GameMenuManager] 等待 InputSystemWrapper 初始化... 第 {waitCount} 幀");
+            }
             yield return null;
         }
+        
+        float inputWaitTime = Time.unscaledTime - startTime;
+        Debug.Log($"[GameMenuManager] InputSystemWrapper 等待完成，耗時: {inputWaitTime:F2}s, 幀數: {waitCount}");
         
         if (InputSystemWrapper.Instance != null)
         {
@@ -104,6 +123,20 @@ public class GameMenuManager : UIPanel
         {
             Debug.LogError("[GameMenuManager] 無法獲取 InputSystemWrapper 實例，事件訂閱失敗！");
         }
+        
+        // 在事件訂閱完成後，再等待一幀，然後初始化本地化系統
+        yield return null;
+        Debug.Log("[GameMenuManager] ===== 開始本地化系統初始化 =====");
+        Debug.Log($"[GameMenuManager] 本地化初始化時機 - Time.unscaledTime: {Time.unscaledTime:F2}s");
+        Debug.Log($"[GameMenuManager] GameSettings.Instance 狀態: {(GameSettings.Instance != null ? "存在" : "null")}");
+        
+        if (GameSettings.Instance != null)
+        {
+            Debug.Log($"[GameMenuManager] GameSettings 已初始化: {GameSettings.Instance.IsLocalizationInitialized()}");
+        }
+        
+        InitializeLocalization();
+        Debug.Log("[GameMenuManager] ===== 延遲初始化流程完成 =====");
     }
     
     /// <summary>
@@ -143,6 +176,12 @@ public class GameMenuManager : UIPanel
     {
         // 取消訂閱輸入事件，避免內存洩漏
         UnsubscribeFromInputEvents();
+        
+        // 取消訂閱本地化事件
+        if (GameSettings.Instance != null)
+        {
+            GameSettings.Instance.OnLanguageChanged -= OnLocalizationLanguageChanged;
+        }
     }
     
     /// <summary>
@@ -428,13 +467,20 @@ public class GameMenuManager : UIPanel
             {
                 Debug.Log($"遊戲已儲存: {timeStamp}.eqg");
                 
-                // 直接設置按鈕為已儲存狀態
+                // 直接設置按鈕為已儲存狀態，使用本地化文字
                 if (saveGameButton != null)
                 {
                     TextMeshProUGUI buttonText = saveGameButton.GetComponentInChildren<TextMeshProUGUI>();
                     if (buttonText != null)
                     {
-                        buttonText.text = "已儲存";
+                        if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+                        {
+                            buttonText.text = GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.status.saved");
+                        }
+                        else
+                        {
+                            buttonText.text = "已儲存"; // 回退文字
+                        }
                     }
                     saveGameButton.interactable = false;
                 }
@@ -442,13 +488,23 @@ public class GameMenuManager : UIPanel
             else
             {
                 Debug.LogError("儲存遊戲失敗");
-                ShowMessage("儲存失敗！請檢查磁碟空間");
+                string errorMessage = "儲存失敗！請檢查磁碟空間"; // 回退文字
+                if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+                {
+                    errorMessage = GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.message.save_failed");
+                }
+                ShowMessage(errorMessage);
             }
         }
         else
         {
             Debug.LogError("SaveManager Instance 未找到！");
-            ShowMessage("儲存系統未初始化");
+            string errorMessage = "儲存系統未初始化"; // 回退文字
+            if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+            {
+                errorMessage = GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.message.save_system_error");
+            }
+            ShowMessage(errorMessage);
         }
     }
     
@@ -492,7 +548,12 @@ public class GameMenuManager : UIPanel
         else
         {
             Debug.LogError("PlayerGameSettingsUI Instance not found! Please make sure it exists in the scene.");
-            ShowMessage("設定系統未初始化");
+            string errorMessage = "設定系統未初始化"; // 回退文字
+            if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+            {
+                errorMessage = GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.message.settings_system_error");
+            }
+            ShowMessage(errorMessage);
         }
     }
     
@@ -651,11 +712,24 @@ public class GameMenuManager : UIPanel
     
     private string GetOriginalButtonText(Button button)
     {
-        if (button == resumeButton) return "繼續遊戲";
-        if (button == saveGameButton) return "儲存遊戲";
-        if (button == loadGameButton) return "載入遊戲";
-        if (button == settingsButton) return "設定";
-        if (button == exitGameButton) return "離開遊戲";
+        // 使用本地化文字
+        if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+        {
+            if (button == resumeButton) return GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.button.resume");
+            if (button == saveGameButton) return GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.button.save");
+            if (button == loadGameButton) return GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.button.load");
+            if (button == settingsButton) return GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.button.settings");
+            if (button == exitGameButton) return GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.button.exit");
+        }
+        else
+        {
+            // 回退到硬編碼文字
+            if (button == resumeButton) return "繼續遊戲";
+            if (button == saveGameButton) return "儲存遊戲";
+            if (button == loadGameButton) return "載入遊戲";
+            if (button == settingsButton) return "設定";
+            if (button == exitGameButton) return "離開遊戲";
+        }
         
         TextMeshProUGUI buttonText = button.GetComponentInChildren<TextMeshProUGUI>();
         if (buttonText != null)
@@ -682,7 +756,15 @@ public class GameMenuManager : UIPanel
             TextMeshProUGUI buttonText = saveGameButton.GetComponentInChildren<TextMeshProUGUI>();
             if (buttonText != null)
             {
-                buttonText.text = "儲存遊戲";
+                // 使用本地化文字
+                if (GameSettings.Instance != null && GameSettings.Instance.IsLocalizationInitialized())
+                {
+                    buttonText.text = GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.button.save");
+                }
+                else
+                {
+                    buttonText.text = "儲存遊戲"; // 回退文字
+                }
             }
             saveGameButton.interactable = true;
         }
@@ -701,4 +783,365 @@ public class GameMenuManager : UIPanel
             EventSystem.current.SetSelectedGameObject(menuButtons[0].gameObject);
         }
     }
+    
+    #region 本地化系統
+    
+    /// <summary>
+    /// 初始化本地化系統
+    /// </summary>
+    private void InitializeLocalization()
+    {
+        Debug.Log("[GameMenuManager] ===== 開始初始化本地化系統 =====");
+        Debug.Log($"[GameMenuManager] GameSettings.Instance 狀態: {(GameSettings.Instance != null ? "存在" : "null")}");
+        
+        // 增強診斷：檢查 Unity Localization 系統狀態
+        try
+        {
+            if (UnityEngine.Localization.Settings.LocalizationSettings.Instance != null)
+            {
+                Debug.Log("[GameMenuManager] Unity LocalizationSettings 實例已存在");
+                var selectedLocale = UnityEngine.Localization.Settings.LocalizationSettings.SelectedLocale;
+                Debug.Log($"[GameMenuManager] Unity 當前選中語言: {(selectedLocale != null ? selectedLocale.LocaleName : "null")}");
+            }
+            else
+            {
+                Debug.LogWarning("[GameMenuManager] Unity LocalizationSettings 實例為 null");
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[GameMenuManager] 檢查 Unity LocalizationSettings 時發生異常: {e.Message}");
+        }
+        
+        // 檢查所有本地化組件引用
+        CheckLocalizationComponentReferences();
+        
+        // 等待 GameSettings 初始化完成，然後更新 UI 文字
+        StartCoroutine(WaitForLocalizationAndUpdateUI());
+        
+        // 註冊語言變更事件
+        if (GameSettings.Instance != null)
+        {
+            // 檢查是否已經註冊過事件，避免重複註冊
+            try
+            {
+                // 先嘗試取消註冊（防止重複）
+                GameSettings.Instance.OnLanguageChanged -= OnLocalizationLanguageChanged;
+                // 然後重新註冊
+                GameSettings.Instance.OnLanguageChanged += OnLocalizationLanguageChanged;
+                Debug.Log("[GameMenuManager] 已註冊語言變更事件");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[GameMenuManager] 註冊語言變更事件時發生錯誤: {e.Message}");
+            }
+        }
+        else
+        {
+            Debug.LogError("[GameMenuManager] 無法註冊語言變更事件 - GameSettings.Instance 為 null");
+            Debug.LogError("[GameMenuManager] 這可能表示:");
+            Debug.LogError("1. GameSettings 物件在場景中不存在");
+            Debug.LogError("2. GameSettings 的 Awake() 方法尚未執行");
+            Debug.LogError("3. GameSettings 腳本有編譯錯誤");
+        }
+        
+        Debug.Log("[GameMenuManager] ===== 本地化系統初始化請求已提交 =====");
+    }
+    
+    /// <summary>
+    /// 檢查所有本地化組件引用
+    /// </summary>
+    private void CheckLocalizationComponentReferences()
+    {
+        Debug.Log("[GameMenuManager] 檢查本地化組件引用:");
+        Debug.Log($"  resumeButtonText: {(resumeButtonText != null ? "✓" : "✗ null")}");
+        Debug.Log($"  saveButtonText: {(saveButtonText != null ? "✓" : "✗ null")}");
+        Debug.Log($"  loadButtonText: {(loadButtonText != null ? "✓" : "✗ null")}");
+        Debug.Log($"  settingsButtonText: {(settingsButtonText != null ? "✓" : "✗ null")}");
+        Debug.Log($"  exitButtonText: {(exitButtonText != null ? "✓" : "✗ null")}");
+        
+        int nullCount = 0;
+        if (resumeButtonText == null) nullCount++;
+        if (saveButtonText == null) nullCount++;
+        if (loadButtonText == null) nullCount++;
+        if (settingsButtonText == null) nullCount++;
+        if (exitButtonText == null) nullCount++;
+        
+        if (nullCount > 0)
+        {
+            Debug.LogError($"[GameMenuManager] 發現 {nullCount} 個本地化組件引用為 null！請在 Inspector 中設置這些引用。");
+        }
+        else
+        {
+            Debug.Log("[GameMenuManager] 所有本地化組件引用都已正確設置 ✓");
+        }
+    }
+    
+    /// <summary>
+    /// 等待本地化系統初始化並更新 UI
+    /// </summary>
+    private System.Collections.IEnumerator WaitForLocalizationAndUpdateUI()
+    {
+        Debug.Log("[GameMenuManager] ===== 等待本地化系統初始化開始 =====");
+        Debug.Log($"[GameMenuManager] 初始檢查 - Time.unscaledTime: {Time.unscaledTime:F2}s");
+        
+        float startTime = Time.unscaledTime;
+        float timeout = 10f; // 10秒超時
+        int checkCount = 0;
+        
+        // 詳細狀態檢查
+        Debug.Log($"[GameMenuManager] GameSettings.Instance 存在: {GameSettings.Instance != null}");
+        
+        // 等待 GameSettings 初始化完成
+        while (GameSettings.Instance == null || !GameSettings.Instance.IsLocalizationInitialized())
+        {
+            checkCount++;
+            float elapsedTime = Time.unscaledTime - startTime;
+            
+            if (elapsedTime > timeout)
+            {
+                Debug.LogError($"[GameMenuManager] ===== 本地化系統初始化超時 =====");
+                Debug.LogError($"[GameMenuManager] 超時詳情 - 等待時間: {elapsedTime:F2}s, 檢查次數: {checkCount}");
+                Debug.LogError($"[GameMenuManager] GameSettings.Instance: {(GameSettings.Instance != null ? "存在" : "null")}");
+                
+                if (GameSettings.Instance != null)
+                {
+                    Debug.LogError($"[GameMenuManager] GameSettings 初始化狀態: {GameSettings.Instance.IsLocalizationInitialized()}");
+                    Debug.LogError($"[GameMenuManager] 可能的問題: Unity Localization Settings 尚未完成初始化");
+                }
+                else
+                {
+                    Debug.LogError("[GameMenuManager] 請檢查:");
+                    Debug.LogError("1. 場景中是否存在 GameSettings 物件");
+                    Debug.LogError("2. GameSettings 腳本是否正確掛載");
+                    Debug.LogError("3. Unity Localization Package 是否正確安裝和配置");
+                }
+                
+                // 使用回退機制
+                Debug.LogWarning("[GameMenuManager] 啟用回退機制：使用硬編碼文字");
+                UpdateAllLocalizedTextsWithFallback();
+                yield break;
+            }
+            
+            // 每秒報告一次狀態
+            if (elapsedTime > 1f && checkCount % 10 == 0) // 假設大約每秒10幀
+            {
+                Debug.LogWarning($"[GameMenuManager] 仍在等待本地化系統... 時間: {elapsedTime:F1}s, 檢查: {checkCount}");
+                Debug.LogWarning($"[GameMenuManager] 當前狀態 - GameSettings存在: {GameSettings.Instance != null}, " +
+                               $"已初始化: {(GameSettings.Instance != null ? GameSettings.Instance.IsLocalizationInitialized().ToString() : "N/A")}");
+                
+                // 嘗試手動觸發 GameSettings 初始化（如果存在但未初始化）
+                if (GameSettings.Instance != null && !GameSettings.Instance.IsLocalizationInitialized())
+                {
+                    Debug.LogWarning("[GameMenuManager] 嘗試手動觸發 GameSettings 初始化...");
+                    StartCoroutine(GameSettings.Instance.InitializeLocalization());
+                }
+            }
+            
+            yield return new WaitForSeconds(0.1f);
+        }
+        
+        float totalWaitTime = Time.unscaledTime - startTime;
+        Debug.Log($"[GameMenuManager] ===== 本地化系統初始化成功 =====");
+        Debug.Log($"[GameMenuManager] 初始化耗時: {totalWaitTime:F2}s, 檢查次數: {checkCount}");
+        Debug.Log($"[GameMenuManager] 當前語言: {GameSettings.Instance.GetCurrentLanguageCode()}");
+        
+        // 更新所有 UI 文字
+        UpdateAllLocalizedTexts();
+        
+        Debug.Log("[GameMenuManager] ===== 本地化 UI 更新完成 =====");
+    }
+    
+    /// <summary>
+    /// 語言變更事件處理
+    /// </summary>
+    private void OnLocalizationLanguageChanged(string languageCode)
+    {
+        Debug.Log($"[GameMenuManager] ===== 語言變更事件觸發 =====");
+        Debug.Log($"[GameMenuManager] 新語言代碼: {languageCode}");
+        Debug.Log($"[GameMenuManager] GameSettings 已初始化: {(GameSettings.Instance != null ? GameSettings.Instance.IsLocalizationInitialized().ToString() : "Instance is null")}");
+        
+        if (GameSettings.Instance == null)
+        {
+            Debug.LogError("[GameMenuManager] 語言變更時 GameSettings.Instance 為 null！");
+            return;
+        }
+        
+        if (!GameSettings.Instance.IsLocalizationInitialized())
+        {
+            Debug.LogError("[GameMenuManager] 語言變更時本地化系統尚未初始化！");
+            return;
+        }
+        
+        // 更新所有本地化文字
+        Debug.Log("[GameMenuManager] 開始更新所有本地化文字...");
+        UpdateAllLocalizedTexts();
+        Debug.Log("[GameMenuManager] ===== 語言變更處理完成 =====");
+    }
+    
+    /// <summary>
+    /// 更新所有按鈕的本地化文字
+    /// </summary>
+    private void UpdateAllLocalizedTexts()
+    {
+        if (GameSettings.Instance == null || !GameSettings.Instance.IsLocalizationInitialized())
+        {
+            Debug.LogWarning("[GameMenuManager] UpdateAllLocalizedTexts: GameSettings 尚未初始化");
+            return;
+        }
+        
+        Debug.Log("[GameMenuManager] 開始更新所有按鈕本地化文字");
+        
+        // 更新按鈕文字
+        if (resumeButtonText != null)
+        {
+            Debug.Log("[GameMenuManager] 更新 resumeButtonText");
+            GameSettings.Instance.UpdateLocalizedText(resumeButtonText, "UI_Tables", "menu.button.resume");
+        }
+        else
+        {
+            Debug.LogWarning("[GameMenuManager] resumeButtonText 為 null，跳過");
+        }
+        
+        if (saveButtonText != null)
+        {
+            Debug.Log("[GameMenuManager] 更新 saveButtonText");
+            GameSettings.Instance.UpdateLocalizedText(saveButtonText, "UI_Tables", "menu.button.save");
+        }
+        else
+        {
+            Debug.LogWarning("[GameMenuManager] saveButtonText 為 null，跳過");
+        }
+        
+        if (loadButtonText != null)
+        {
+            Debug.Log("[GameMenuManager] 更新 loadButtonText");
+            GameSettings.Instance.UpdateLocalizedText(loadButtonText, "UI_Tables", "menu.button.load");
+        }
+        else
+        {
+            Debug.LogWarning("[GameMenuManager] loadButtonText 為 null，跳過");
+        }
+        
+        if (settingsButtonText != null)
+        {
+            Debug.Log("[GameMenuManager] 更新 settingsButtonText");
+            GameSettings.Instance.UpdateLocalizedText(settingsButtonText, "UI_Tables", "menu.button.settings");
+        }
+        else
+        {
+            Debug.LogWarning("[GameMenuManager] settingsButtonText 為 null，跳過");
+        }
+        
+        if (exitButtonText != null)
+        {
+            Debug.Log("[GameMenuManager] 更新 exitButtonText");
+            GameSettings.Instance.UpdateLocalizedText(exitButtonText, "UI_Tables", "menu.button.exit");
+        }
+        else
+        {
+            Debug.LogWarning("[GameMenuManager] exitButtonText 為 null，跳過");
+        }
+        
+        Debug.Log("[GameMenuManager] 所有按鈕本地化文字更新完成");
+    }
+    
+    /// <summary>
+    /// 使用硬編碼文字作為回退機制更新 UI
+    /// </summary>
+    private void UpdateAllLocalizedTextsWithFallback()
+    {
+        Debug.Log("[GameMenuManager] 使用回退機制更新所有按鈕文字（硬編碼）");
+        
+        // 使用硬編碼的繁體中文文字作為回退
+        if (resumeButtonText != null)
+        {
+            resumeButtonText.text = "繼續遊戲";
+            Debug.Log("[GameMenuManager] 回退更新 resumeButtonText: 繼續遊戲");
+        }
+        
+        if (saveButtonText != null)
+        {
+            saveButtonText.text = "儲存遊戲";
+            Debug.Log("[GameMenuManager] 回退更新 saveButtonText: 儲存遊戲");
+        }
+        
+        if (loadButtonText != null)
+        {
+            loadButtonText.text = "載入遊戲";
+            Debug.Log("[GameMenuManager] 回退更新 loadButtonText: 載入遊戲");
+        }
+        
+        if (settingsButtonText != null)
+        {
+            settingsButtonText.text = "設定";
+            Debug.Log("[GameMenuManager] 回退更新 settingsButtonText: 設定");
+        }
+        
+        if (exitButtonText != null)
+        {
+            exitButtonText.text = "離開遊戲";
+            Debug.Log("[GameMenuManager] 回退更新 exitButtonText: 離開遊戲");
+        }
+        
+        Debug.Log("[GameMenuManager] 回退機制更新完成");
+    }
+    
+    /// <summary>
+    /// 手動觸發本地化文字更新（用於除錯）
+    /// </summary>
+    [ContextMenu("手動更新本地化文字")]
+    public void ForceUpdateLocalization()
+    {
+        Debug.Log("[GameMenuManager] ===== 手動觸發本地化更新 =====");
+        
+        if (GameSettings.Instance == null)
+        {
+            Debug.LogError("[GameMenuManager] GameSettings.Instance 為 null！請確保場景中存在 GameSettings。");
+            return;
+        }
+        
+        if (!GameSettings.Instance.IsLocalizationInitialized())
+        {
+            Debug.LogError("[GameMenuManager] GameSettings 尚未初始化！請等待初始化完成。");
+            return;
+        }
+        
+        Debug.Log($"[GameMenuManager] 當前語言: {GameSettings.Instance.GetCurrentLanguageCode()}");
+        
+        // 檢查組件引用
+        CheckLocalizationComponentReferences();
+        
+        // 強制更新所有本地化文字
+        UpdateAllLocalizedTexts();
+        
+        Debug.Log("[GameMenuManager] ===== 手動本地化更新完成 =====");
+    }
+    
+    /// <summary>
+    /// 檢查本地化系統狀態（用於除錯）
+    /// </summary>
+    [ContextMenu("檢查本地化系統狀態")]
+    public void CheckLocalizationSystemStatus()
+    {
+        Debug.Log("[GameMenuManager] ===== 本地化系統狀態檢查 =====");
+        Debug.Log($"GameSettings.Instance 存在: {GameSettings.Instance != null}");
+        
+        if (GameSettings.Instance != null)
+        {
+            Debug.Log($"GameSettings 已初始化: {GameSettings.Instance.IsLocalizationInitialized()}");
+            Debug.Log($"當前語言: {GameSettings.Instance.GetCurrentLanguageCode()}");
+            var availableLanguages = GameSettings.Instance.GetAvailableLanguages();
+            Debug.Log($"可用語言: {string.Join(", ", availableLanguages)}");
+            
+            // 測試獲取本地化文字
+            string testText = GameSettings.Instance.GetLocalizedString("UI_Tables", "menu.button.resume");
+            Debug.Log($"測試獲取本地化文字 'menu.button.resume': '{testText}'");
+        }
+        
+        CheckLocalizationComponentReferences();
+        Debug.Log("[GameMenuManager] ===== 狀態檢查完成 =====");
+    }
+    
+    #endregion
 }

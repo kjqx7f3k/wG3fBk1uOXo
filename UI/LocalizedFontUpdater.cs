@@ -99,12 +99,6 @@ public class LocalizedFontUpdater : MonoBehaviour
             FontManager.Instance.OnFontChanged += OnFontChanged;
         }
         
-        // 註冊 LocalizedUIHelper 的語言變更事件
-        if (LocalizedUIHelper.Instance != null)
-        {
-            LocalizedUIHelper.Instance.OnLanguageChanged += OnLanguageChanged;
-        }
-        
         // 註冊 GameSettings 的語言變更事件
         if (GameSettings.Instance != null)
         {
@@ -122,11 +116,6 @@ public class LocalizedFontUpdater : MonoBehaviour
             FontManager.Instance.OnFontChanged -= OnFontChanged;
         }
         
-        if (LocalizedUIHelper.Instance != null)
-        {
-            LocalizedUIHelper.Instance.OnLanguageChanged -= OnLanguageChanged;
-        }
-        
         if (GameSettings.Instance != null)
         {
             GameSettings.Instance.OnLanguageChanged -= OnGameSettingsLanguageChanged;
@@ -139,17 +128,6 @@ public class LocalizedFontUpdater : MonoBehaviour
     private void OnFontChanged(string languageCode)
     {
         if (!useGlobalFontManager)
-        {
-            UpdateFont();
-        }
-    }
-    
-    /// <summary>
-    /// 語言變更事件處理（來自 LocalizedUIHelper）
-    /// </summary>
-    private void OnLanguageChanged(UnityEngine.Localization.Locale newLocale)
-    {
-        if (newLocale != null)
         {
             UpdateFont();
         }
@@ -209,16 +187,16 @@ public class LocalizedFontUpdater : MonoBehaviour
             }
         }
         
-        // 其次使用 LocalizedUIHelper 的當前語言
-        if (LocalizedUIHelper.Instance != null)
+        // 其次使用 GameSettings 的當前語言
+        if (GameSettings.Instance != null)
         {
-            return LocalizedUIHelper.Instance.GetCurrentLanguageCode();
+            return GameSettings.Instance.GetCurrentLanguageCode();
         }
         
         // 最後使用 GameSettings 的語言設定
         if (GameSettings.Instance != null)
         {
-            return GameSettings.Instance.CurrentLanguage;
+            return GameSettings.Instance.Language;
         }
         
         return "zh-TW"; // 預設值

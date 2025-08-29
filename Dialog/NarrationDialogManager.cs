@@ -29,7 +29,7 @@ public class NarrationDialogManager : BaseDialogManager
         // 設定UIPanel屬性 - 旁白對話不阻擋角色移動
         blockCharacterMovement = false;  // 不阻擋角色移動
         
-        Debug.Log("NarrationDialogManager 初始化完成");
+        // Debug.log("NarrationDialogManager 初始化完成");
     }
     
     protected override void OnDestroy()
@@ -38,7 +38,7 @@ public class NarrationDialogManager : BaseDialogManager
         if (Instance == this)
         {
             Instance = null;
-            Debug.Log("NarrationDialogManager 已清理");
+            // Debug.log("NarrationDialogManager 已清理");
         }
     }
     
@@ -68,7 +68,7 @@ public class NarrationDialogManager : BaseDialogManager
         // 旁白對話跳過選項，直接選擇第一個選項繼續
         if (options != null && options.Count > 0)
         {
-            Debug.Log($"[NarrationDialogManager] 旁白跳過選項，自動選擇第一個選項");
+            // Debug.log($"[NarrationDialogManager] 旁白跳過選項，自動選擇第一個選項");
             OnOptionSelected(options[0].nextId);
         }
         else
@@ -175,7 +175,7 @@ public class NarrationDialogManager : BaseDialogManager
         if (IsInDialog)
         {
             HideDialogUI();
-            Debug.Log($"[NarrationDialogManager] 自動隱藏旁白");
+            // Debug.log($"[NarrationDialogManager] 自動隱藏旁白");
         }
     }
     
@@ -187,7 +187,7 @@ public class NarrationDialogManager : BaseDialogManager
         if (IsInDialog)
         {
             HideDialogUI();
-            Debug.Log($"[NarrationDialogManager] 手動隱藏旁白");
+            // Debug.log($"[NarrationDialogManager] 手動隱藏旁白");
         }
     }
     

@@ -54,9 +54,9 @@ public class FontManager : MonoBehaviour
     private void Start()
     {
         // 註冊語言變更事件
-        if (updateOnLanguageChange && LocalizedUIHelper.Instance != null)
+        if (updateOnLanguageChange && GameSettings.Instance != null)
         {
-            LocalizedUIHelper.Instance.OnLanguageChanged += OnLanguageChanged;
+            GameSettings.Instance.OnLanguageChanged += OnGameSettingsLanguageChanged;
         }
         
         // 如果 GameSettings 存在，也註冊其語言變更事件
@@ -91,7 +91,7 @@ public class FontManager : MonoBehaviour
     }
     
     /// <summary>
-    /// 語言變更事件處理（來自 LocalizedUIHelper）
+    /// 語言變更事件處理（來自 GameSettings）
     /// </summary>
     private void OnLanguageChanged(Locale newLocale)
     {
@@ -310,9 +310,9 @@ public class FontManager : MonoBehaviour
         if (Instance == this)
         {
             // 取消註冊事件
-            if (LocalizedUIHelper.Instance != null)
+            if (GameSettings.Instance != null)
             {
-                LocalizedUIHelper.Instance.OnLanguageChanged -= OnLanguageChanged;
+                GameSettings.Instance.OnLanguageChanged -= OnGameSettingsLanguageChanged;
             }
             
             if (GameSettings.Instance != null)

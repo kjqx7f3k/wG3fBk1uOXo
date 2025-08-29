@@ -97,6 +97,10 @@ public abstract class UIPanel : MonoBehaviour
         // 處理時間控制
         if (pauseGameWhenOpen)
         {
+            if (debugMode)
+            {
+                Debug.Log($"[{GetType().Name}] 暫停遊戲 (timeScale: {Time.timeScale} -> 0)");
+            }
             Time.timeScale = 0f;
         }
         
@@ -118,10 +122,30 @@ public abstract class UIPanel : MonoBehaviour
         
         if (panelCanvas != null) panelCanvas.enabled = false;
         
-        // 處理時間控制 - 簡單檢查是否有其他暫停UI
-        if (pauseGameWhenOpen && !HasOtherPausingUI())
+        // 處理時間控制 - 加強保護邏輯
+        if (pauseGameWhenOpen)
         {
-            Time.timeScale = 1f;
+            bool hasOtherPausingUI = HasOtherPausingUI();
+            if (debugMode)
+            {
+                Debug.Log($"[{GetType().Name}] 檢查其他暫停UI: {hasOtherPausingUI}");
+            }
+            
+            if (!hasOtherPausingUI)
+            {
+                if (debugMode)
+                {
+                    Debug.Log($"[{GetType().Name}] 恢復遊戲 (timeScale: {Time.timeScale} -> 1)");
+                }
+                Time.timeScale = 1f;
+            }
+            else
+            {
+                if (debugMode)
+                {
+                    Debug.Log($"[{GetType().Name}] 保持暫停狀態，因為有其他暫停UI開啟");
+                }
+            }
         }
         
         OnClosed();

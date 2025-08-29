@@ -21,6 +21,7 @@ public class Portal : MonoBehaviour
     
     [Header("觸發設定")]
     [SerializeField] private float activationDelay = 0.5f;
+    [SerializeField] private bool instantMode = false;
     
     [Header("除錯設定")]
     [SerializeField] private bool debugMode = false;
@@ -135,6 +136,13 @@ public class Portal : MonoBehaviour
     /// </summary>
     private IEnumerator ActivationSequence()
     {
+        // 即時模式或無延遲時直接載入
+        if (instantMode || activationDelay <= 0)
+        {
+            LoadSceneWithSettings();
+            yield break;
+        }
+        
         // 等待激活延遲
         yield return new WaitForSeconds(activationDelay);
         
@@ -150,8 +158,8 @@ public class Portal : MonoBehaviour
         if (debugMode)
             Debug.Log($"{portalName}: 開始載入場景 {targetSceneName}");
         
-        // 顯示載入畫面
-        if (showLoadingScreen && LoadingScreenManager.Instance != null)
+        // 只在非即時模式時才顯示載入畫面
+        if (showLoadingScreen && !instantMode && LoadingScreenManager.Instance != null)
         {
             LoadingScreenManager.Instance.OnSceneLoadStarted(targetSceneName);
         }
@@ -166,29 +174,48 @@ public class Portal : MonoBehaviour
     private IEnumerator LoadSceneAsync()
     {
         var asyncOperation = UnityEngine.SceneManagement.SceneManager.LoadSceneAsync(targetSceneName);
-        asyncOperation.allowSceneActivation = false;
         
-        // 模擬載入進度
-        while (!asyncOperation.isDone)
+        // 即時模式或無延遲時直接允許場景激活
+        if (instantMode || activationDelay <= 0)
         {
-            float progress = Mathf.Clamp01(asyncOperation.progress / 0.9f);
-            
-            if (debugMode)
-                Debug.Log($"{portalName}: 場景載入進度: {progress * 100:F1}%");
-            
-            // 當進度達倉90%時，允許場景激活
-            if (asyncOperation.progress >= 0.9f)
+            asyncOperation.allowSceneActivation = true;
+            while (!asyncOperation.isDone)
             {
-                // 等待一小段時間讓用戶看到完成狀態
-                yield return new WaitForSeconds(0.5f);
-                asyncOperation.allowSceneActivation = true;
+                yield return null;
             }
+        }
+        else
+        {
+            asyncOperation.allowSceneActivation = false;
             
-            yield return null;
+            // 模擬載入進度
+            while (!asyncOperation.isDone)
+            {
+                float progress = Mathf.Clamp01(asyncOperation.progress / 0.9f);
+                
+                if (debugMode)
+                    Debug.Log($"{portalName}: 場景載入進度: {progress * 100:F1}%");
+                
+                // 當進度達到90%時，允許場景激活
+                if (asyncOperation.progress >= 0.9f)
+                {
+                    // 只在有延遲設定時才等待
+                    if (activationDelay > 0)
+                    {
+                        yield return new WaitForSeconds(0.1f);
+                    }
+                    asyncOperation.allowSceneActivation = true;
+                }
+                
+                yield return null;
+            }
         }
         
         // 場景載入完成後處理
-        yield return new WaitForEndOfFrame();
+        if (!instantMode && activationDelay > 0)
+        {
+            yield return new WaitForEndOfFrame();
+        }
         SetupNewScene();
         
         // 隱藏載入畫面

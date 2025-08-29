@@ -1352,28 +1352,8 @@ public class InventoryManager : UIPanel
             return;
         }
         
-        // 構建說明文字
-        string description = $"<b>{selectedItem.Name}</b>\n\n";
-        description += $"{selectedItem.Description}\n\n";
-        description += $"類型: {GetItemTypeString(selectedItem)}\n";
-        description += $"數量: {GetItemCount(selectedItem)}\n";
-        
-        if (selectedItem.MaxStackSize > 1)
-        {
-            description += $"最大堆疊: {selectedItem.MaxStackSize}\n";
-        }
-        
-        if (selectedItem.IsUsable)
-        {
-            description += "可使用\n";
-        }
-        
-        if (selectedItem.IsConsumable)
-        {
-            description += "消耗品\n";
-        }
-        
-        itemDescriptionText.text = description;
+        // 只顯示純粹的描述文字
+        itemDescriptionText.text = selectedItem.Description;
     }
     
     /// <summary>
